@@ -26,7 +26,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ISSUE_BODY: ${{ github.event.issue.body }}
         run: |
-          python scripts/researcher.py > report.md
+          # 使用 'tee' 指令：同時把結果印在螢幕上 (監控) 並存入檔案 (回覆)
+          python scripts/researcher.py | tee report.md
           
       - name: Post Report to Issue
         uses: peter-evans/create-or-update-comment@v4
