@@ -1,37 +1,37 @@
 import os
 import sys
+import time
 from google import genai
 
 def main():
     api_key = os.environ.get("GEMINI_API_KEY")
-    issue_text = os.environ.get("ISSUE_BODY", "沒有提供研究主題")
+    issue_text = os.environ.get("ISSUE_BODY", "沒有主題")
     
     if not api_key:
-        print("❌ 錯誤：GitHub Secret 中找不到 GEMINI_API_KEY")
+        print("❌ 錯誤：找不到 API KEY")
         return
 
-    # 建立 Client
     client = genai.Client(api_key=api_key)
     
-    try:
-        # 直接使用你在 AI Studio 看到的最新模型名稱
-        response = client.models.generate_content(
-            model='gemini-2.5-flash', 
-            contents=f"你是一位技術研究專家，請針對以下主題進行深入研究，並產出結構清晰的 Markdown 報告：\n\n{issue_text}"
-        )
-        
-        if response.text:
+    # 嘗試次數
+    attempts = 3
+    for i in range(attempts):
+        try:
+            response = client.models.generate_content(
+                model='gemini-2.5-flash', 
+                contents=f"請針對以下主題進行研究並產出 Markdown 報告：\n\n{issue_text}"
+            )
             print(response.text)
-        else:
-            print("⚠️ AI 回傳內容為空，請檢查輸入內容。")
+            return  # 成功後直接退出
             
-    except Exception as e:
-        # 如果還是 429，我們會印出更友善的重試建議
-        error_msg = str(e)
-        if "429" in error_msg:
-            print(f"### ⏳ AI 員工忙碌中 (429)\n原因：免費額度暫時用完，請等待 1 分鐘後再重新貼標籤測試。")
-        else:
-            print(f"### ❌ AI 員工執行失敗\n原因：`{error_msg}`")
+        except Exception as e:
+            if "503" in str(e) and i < attempts - 1:
+                print(f"### ⏳ 伺服器忙碌中，{i+1} 秒後重試...", file=sys.stderr)
+                time.sleep(5)  # 等待 5 秒再試
+                continue
+            else:
+                print(f"### ❌ AI 員工執行失敗\n原因：`{str(e)}`")
+                break
 
 if __name__ == "__main__":
     main()
