@@ -14,11 +14,11 @@ def main():
     client = genai.Client(api_key=api_key)
     
     try:
-        # 在 2026 年，直接使用 'gemini-2.0-flash' 或 'models/gemini-2.0-flash'
+        # 在 2026 年，直接使用 'gemini-1.5-flash' 或 'models/gemini-2.0-flash'
         # 我們這裡採用最標準的簡寫
         response = client.models.generate_content(
-            model='gemini-2.0-flash', 
-            contents=f"你是一位技術研究員，請針對以下主題進行深入研究：\n\n{issue_text}"
+        model='gemini-1.5-flash', 
+        contents=f"請針對以下主題進行研究：\n\n{issue_text}"
         )
         
         if response.text:
