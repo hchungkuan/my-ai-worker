@@ -1,29 +1,30 @@
 import os
 import sys
-from google import genai  # 2026 新版 SDK 導入方式
+# 注意：這裡就是 2026 年最新的導入方式
+from google import genai
 
-def run():
+def main():
     api_key = os.environ.get("GEMINI_API_KEY")
+    issue_text = os.environ.get("ISSUE_BODY", "No content found.")
+    
     if not api_key:
-        print("錯誤：找不到 GEMINI_API_KEY")
+        print("Error: GEMINI_API_KEY is missing.")
         sys.exit(1)
 
-    # 初始化 Client
+    # 建立客戶端
     client = genai.Client(api_key=api_key)
     
-    # 取得 Issue 內容
-    issue_body = os.environ.get("ISSUE_BODY", "請幫我做技術研究")
-    
     try:
-        # 使用最新 2.0 模型
+        # 使用最新 2.0 模型進行研究
         response = client.models.generate_content(
             model='gemini-2.0-flash',
-            contents=issue_body
+            contents=f"請針對以下技術主題進行深入研究並寫出 Markdown 報告：\n\n{issue_text}"
         )
+        # 把結果印出來，GitHub Actions 會把它存進 report.md
         print(response.text)
     except Exception as e:
-        print(f"API 調用失敗：{e}")
+        print(f"API Error: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
-    run()
+    main()
