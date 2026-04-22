@@ -17,7 +17,7 @@ def main():
         # 在 2026 年，直接使用 'gemini-1.5-flash' 或 'models/gemini-2.0-flash'
         # 我們這裡採用最標準的簡寫
         response = client.models.generate_content(
-        model='gemini-1.5-flash', 
+        model='gemini-2.0-flash', 
         contents=f"請針對以下主題進行研究：\n\n{issue_text}"
         )
         
