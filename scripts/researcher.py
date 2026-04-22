@@ -1,29 +1,36 @@
 import os
 import sys
-# 注意：這裡就是 2026 年最新的導入方式
 from google import genai
 
 def main():
+    # 1. 檢查變數
     api_key = os.environ.get("GEMINI_API_KEY")
     issue_text = os.environ.get("ISSUE_BODY", "No content found.")
     
     if not api_key:
-        print("Error: GEMINI_API_KEY is missing.")
+        print("❌ 錯誤：找不到 GEMINI_API_KEY Secret", file=sys.stderr)
         sys.exit(1)
 
-    # 建立客戶端
+    print(f"📡 正在嘗試連線 Gemini API... 研究主題：{issue_text[:20]}...", file=sys.stderr)
+
+    # 2. 建立客戶端
     client = genai.Client(api_key=api_key)
     
     try:
-        # 使用最新 2.0 模型進行研究
+        # 3. 嘗試調用模型 (加上簡單的重試邏輯)
         response = client.models.generate_content(
             model='gemini-2.0-flash',
-            contents=f"請針對以下技術主題進行深入研究並寫出 Markdown 報告：\n\n{issue_text}"
+            contents=f"你是一位技術研究員，請研究並用 Markdown 回覆：{issue_text}"
         )
-        # 把結果印出來，GitHub Actions 會把它存進 report.md
-        print(response.text)
+        
+        if response.text:
+            print(response.text) # 成功的話，這行會進到 report.md
+        else:
+            print("⚠️ AI 回傳了空內容", file=sys.stderr)
+            
     except Exception as e:
-        print(f"API Error: {e}")
+        # 這裡會把真正的錯誤印出來，讓你在 GitHub Actions 畫面上直接看到
+        print(f"❌ API 執行失敗！詳細原因：\n{str(e)}", file=sys.stderr)
         sys.exit(1)
 
 if __name__ == "__main__":
