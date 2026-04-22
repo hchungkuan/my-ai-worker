@@ -1,25 +1,29 @@
 import os
-import time
-from google import genai  # 升級到最新的庫
+import sys
+from google import genai  # 2026 新版 SDK 導入方式
 
-def run_research():
-    # 初始化客戶端
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+def run():
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("錯誤：找不到 GEMINI_API_KEY")
+        sys.exit(1)
+
+    # 初始化 Client
+    client = genai.Client(api_key=api_key)
     
-    issue_content = os.getenv("ISSUE_BODY", "無內容")
-    prompt = f"你是一位專業技術研究員。請針對以下主題撰寫研究報告：{issue_content}"
-
+    # 取得 Issue 內容
+    issue_body = os.environ.get("ISSUE_BODY", "請幫我做技術研究")
+    
     try:
         # 使用最新 2.0 模型
         response = client.models.generate_content(
-            model='gemini-2.0-flash', 
-            contents=prompt
+            model='gemini-2.0-flash',
+            contents=issue_body
         )
         print(response.text)
     except Exception as e:
-        print(f"發生錯誤：{e}")
-        # 如果是額度問題，等待 10 秒後再試一次（僅限自動化時）
-        time.sleep(10)
+        print(f"API 調用失敗：{e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    run_research()
+    run()
