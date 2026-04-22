@@ -1,0 +1,28 @@
+name: Run AI Researcher
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  ai_job:
+    if: github.event.label.name == 'research'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install AI Library
+        run: pip install google-generativeai
+      - name: Ask Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          python scripts/researcher.py > report.md
+      - name: Reply to Issue
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          body-path: report.md
