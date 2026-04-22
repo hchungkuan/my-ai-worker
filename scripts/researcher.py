@@ -10,25 +10,28 @@ def main():
         print("❌ 錯誤：GitHub Secret 中找不到 GEMINI_API_KEY")
         return
 
-    # 初始化 Client
+    # 建立 Client
     client = genai.Client(api_key=api_key)
     
     try:
-        # 在 2026 年，直接使用 'gemini-1.5-flash' 或 'models/gemini-2.0-flash'
-        # 我們這裡採用最標準的簡寫
+        # 直接使用你在 AI Studio 看到的最新模型名稱
         response = client.models.generate_content(
-        model='gemini-2.0-flash', 
-        contents=f"請針對以下主題進行研究：\n\n{issue_text}"
+            model='gemini-2.5-flash', 
+            contents=f"你是一位技術研究專家，請針對以下主題進行深入研究，並產出結構清晰的 Markdown 報告：\n\n{issue_text}"
         )
         
         if response.text:
             print(response.text)
         else:
-            print("⚠️ AI 回傳了空內容。")
+            print("⚠️ AI 回傳內容為空，請檢查輸入內容。")
             
     except Exception as e:
-        # 這次如果出錯，我們會印出更詳細的資訊
-        print(f"### ❌ AI 員工執行失敗\n原因：`{str(e)}`\n\n*提示：請檢查 Google AI Studio 中的模型權限。*")
+        # 如果還是 429，我們會印出更友善的重試建議
+        error_msg = str(e)
+        if "429" in error_msg:
+            print(f"### ⏳ AI 員工忙碌中 (429)\n原因：免費額度暫時用完，請等待 1 分鐘後再重新貼標籤測試。")
+        else:
+            print(f"### ❌ AI 員工執行失敗\n原因：`{error_msg}`")
 
 if __name__ == "__main__":
     main()
