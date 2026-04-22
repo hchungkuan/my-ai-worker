@@ -13,36 +13,37 @@ def main():
 
     client = genai.Client(api_key=api_key)
     
-    # 定義嘗試順序：先用 2.5，不行就換 2.0
-    models_to_try = ['gemini-2.5-flash', 'gemini-2.0-flash']
-    
-    last_error = ""
+    max_attempts = 3
+    # 設定基礎等待時間（秒）
+    base_delay = 20 
 
-    for model_name in models_to_try:
+    for i in range(max_attempts):
         try:
-            print(f"📡 嘗試使用模型：{model_name}...", file=sys.stderr)
+            print(f"📡 第 {i+1} 次嘗試啟動 AI 員工 (使用 Gemini 2.5 Flash)...", file=sys.stderr)
             
             response = client.models.generate_content(
-                model=model_name, 
-                contents=f"你是一位技術研究專家，請針對以下主題進行深入研究並產出 Markdown 報告：\n\n{issue_text}"
+                model='gemini-2.5-flash', 
+                contents=f"你是一位技術研究專家，請針對以下主題產出詳細的 Markdown 報告：\n\n{issue_text}"
             )
             
             if response.text:
-                # 成功！印出報告內容
                 print(response.text)
-                return 
+                return # 成功就收工
             
         except Exception as e:
-            last_error = str(e)
-            print(f"⚠️ {model_name} 暫時無法使用，原因：{last_error}", file=sys.stderr)
-            # 等待 2 秒後嘗試下一個模型
-            time.sleep(2)
-            continue
-
-    # 如果所有模型都失敗了
-    print(f"### ❌ AI 員工全線忙碌中\n")
-    print(f"嘗試了 {models_to_try} 都失敗了。最後一個錯誤訊息：\n`{last_error}`")
-    print(f"\n*建議：請過幾分鐘後再重新貼標籤測試。*")
+            error_msg = str(e)
+            # 如果還沒到最後一次嘗試，就進行等待
+            if i < max_attempts - 1:
+                # 計算等待時間：20s, 40s, 80s... 每次加倍
+                wait_time = base_delay * (2 ** i)
+                print(f"⚠️ 嘗試失敗，原因：{error_msg[:100]}...", file=sys.stderr)
+                print(f"⏳ 等待 {wait_time} 秒後進行下一次重試...", file=sys.stderr)
+                time.sleep(wait_time)
+            else:
+                # 最後一次也失敗了
+                print(f"### ❌ AI 員工在 3 次重試後仍然失敗\n")
+                print(f"最後一次錯誤訊息：\n`{error_msg}`")
+                print(f"\n*建議：這通常代表您的 Google AI 專案配額目前為 0。請確認是否已在 AI Studio 建立『新專案』的金鑰。*")
 
 if __name__ == "__main__":
     main()
