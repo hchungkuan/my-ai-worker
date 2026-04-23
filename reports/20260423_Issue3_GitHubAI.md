@@ -1,400 +1,346 @@
-作為一位專精於 Vector Informatik 與 EV 充電標準的技術研究專家，我將從軟體架構與自動化流程的角度，針對在 GitHub 環境下構建 AI 助手的議題進行深入的技術研究與分析。雖然我的主要領域偏向嵌入式系統與通訊協定，但大型系統的架構設計、自動化測試與標準化流程與本次任務的核心精神是共通的。
+作為一位專精於 Vector Informatik 與 EV 充電標準的技術研究專家，我將從軟體工程的角度，深入探討如何在 GitHub 生態系統中構建一個具備智慧的 AI 助手，並分析其技術細節與潛在挑戰。
 
 ---
 
-# GitHub 原生 AI 助手建置與自動化流程研究報告
+# GitHub 原生 AI 助手建置與自動化流程研究
 
-## 前言
+## 簡介
 
-隨著生成式 AI 技術的快速發展，將 AI 能力整合到開發工作流程中已成為提升效率和自動化水平的關鍵。GitHub 作為全球最大的開發者協作平台，其豐富的生態系統為構建和部署 AI 助手提供了絕佳的基礎。本研究報告旨在探討如何在 GitHub 平台原生環境下，利用 GitHub Actions、GitHub Apps、GitHub Codespaces 等核心組件，結合外部大語言模型（LLM）API，從零開始構建一個智能自動化助手。報告將詳述其通訊協定、GitHub 硬體（基礎設施）對應、實作步驟、組件關聯及潛在的技術挑戰。
+隨著大語言模型（LLM）的快速發展，將 AI 能力整合到日常開發與協作流程中，已成為提升效率的關鍵。GitHub 作為全球最大的開發者平台，提供了豐富的工具與服務，使其成為構建原生 AI 助手的理想環境。本研究報告將詳細闡述如何在 GitHub 平台上，利用其核心組件（GitHub Actions、GitHub Apps、GitHub Codespaces 等），結合外部 LLM（如 OpenAI, Google Gemini），從零開始建置一個自動化的 AI 助手，並深入分析相關技術挑戰。
 
-### 通訊協定分析
+此 AI 助手的目標是自動化處理如程式碼審查、問題回應、討論摘要、文件生成等任務，以優化開發工作流程。
 
-在 GitHub 原生 AI 助手的架構中，主要涉及以下通訊協定：
+## 環境配置階段
 
-1.  **GitHub Webhooks**: GitHub 事件驅動的基礎。當 Repository 中發生特定事件（如 `push`、`pull_request` 開啟/關閉、`issue_comment` 建立、`discussion_created` 等）時，GitHub 會向預先設定的 URL 發送 HTTP POST 請求。這是觸發 AI 助手工作流程的起始點。
-    *   **協議**: HTTP/HTTPS
-    *   **數據格式**: JSON (Payload 包含事件類型及相關資料)
-2.  **GitHub REST API / GraphQL API**: AI 助手與 GitHub 平台進行互動的核心。用於讀取 Repository 內容、發布評論、創建 Pull Request、管理 Issues、更新 Discussions 等。
-    *   **協議**: HTTP/HTTPS
-    *   **數據格式**: JSON
-    *   **認證**: Personal Access Token (PAT), GitHub App Installation Access Token, OAuth Tokens。
-3.  **外部 LLM REST API / SDK 通訊**: AI 助手獲取智能的核心。用於向大語言模型發送提示（Prompt）並接收生成的回應。
-    *   **協議**: HTTP/HTTPS
-    *   **數據格式**: JSON
-    *   **認證**: API Key (通常透過 HTTP Header 或請求體傳遞)。
-4.  **Git 協議**: 雖然不是直接的 AI 通訊，但在 GitHub Actions 需要 `checkout` 代碼或 `push` 變更時會使用到。
-    *   **協議**: Git (SSH/HTTPS)
+| 功能模組/技術 | 對應工具與技術 | 具體作用 |
+| :------------ | :------------- | :------- |
+| **版本控制與程式碼託管** | GitHub Repository | 儲存 AI 助手的所有程式碼、配置檔案與工作流程定義。作為整個專案的基礎。 |
+| **開發環境** | GitHub Codespaces | 提供一個預配置的、基於雲端的開發環境。開發者無需在本機設置複雜的開發工具鏈，即可直接在瀏覽器中進行開發、測試和調試。 |
+| **秘密管理** | GitHub Repository Secrets / Organization Secrets | 安全地儲存敏感資訊，例如 LLM 的 API 金鑰、GitHub App 的憑證或其他第三方服務的令牌。確保這些資訊不會暴露在程式碼或日誌中。 |
+| **GitHub App 註冊 (若需)** | GitHub Apps | 當助手需要超越單一 Repository 的權限（例如管理多個 Repository、進行組織層級的操作），或需要更精細的權限控制時，註冊並配置 GitHub App 是必要的步驟。它提供獨立的身份和權限模型。 |
 
-### 硬體（GitHub 基礎設施）對應分析
+### 實作步驟：
 
-GitHub 原生 AI 助手的運行並非依賴傳統的專用硬體，而是利用 GitHub 提供的雲端基礎設施：
-
-1.  **GitHub Actions Runners**: 執行 GitHub Actions 工作流程的虛擬環境。可以是 GitHub 託管的（GitHub-hosted runners），或是自託管的（Self-hosted runners）。
-    *   **對應**: 虛擬機或容器實例，預裝 OS (Ubuntu/Windows/macOS), Git, Node.js, Python 等開發工具。提供 CPU, RAM, 存儲等計算資源。
-    *   **作用**: 承載 AI 助手的執行腳本，進行代碼拉取、LLM API 調用、GitHub API 互動等操作。
-2.  **GitHub Backend Services**: 提供 Repository 儲存、Secrets 管理、Webhooks 處理、API 網關、GitHub Apps 服務等。
-    *   **對應**: 分佈式數據庫、消息隊列、API 服務器集群、安全認證服務等。
-    *   **作用**: 儲存工作流程配置、敏感資訊；接收與分發事件；處理所有對 GitHub API 的請求；託管 GitHub Apps 的集成點。
-3.  **GitHub Codespaces**: 提供基於雲端的開發環境。
-    *   **對應**: 高性能虛擬機或容器，通常基於 VS Code Remote Development 技術，預設安裝開發工具鏈。
-    *   **作用**: 作為開發者撰寫、測試 AI 助手邏輯的沙盒環境，與本地開發環境無縫銜接。
-
----
-
-## 實作階段一：環境配置與 Repository 初始化
-
-此階段旨在建立 AI 助手的基礎骨架，包括 GitHub Repository 的創建與敏感資訊的安全配置。
-
-### 功能與工具對應表
-
-| 功能模組/技術 | 具體作用 |
-| :-------------- | :------- |
-| GitHub Repository | 儲存 AI 助手的程式碼、配置文件與工作流程定義。 |
-| GitHub Secrets  | 安全地儲存敏感資訊，如 LLM API Key、GitHub Token。 |
-| `.gitignore`    | 定義版本控制忽略的文件，保護敏感信息不被意外提交。 |
-
-### 實作步驟
-
-1.  **創建新的 GitHub Repository**:
-    *   登入 GitHub 帳號，點擊 `New` 創建一個新的 Repository。
-    *   為其命名 (例如 `ai-github-assistant`)，選擇 `Private` 以保護代碼，並勾選 `Add a README file` 和 `Add .gitignore` (可選 Python 或 Node.js 模板)。
-    *   點擊 `Create repository`。
-2.  **配置 GitHub Secrets**:
-    *   AI 助手需要呼叫外部 LLM API，這通常需要 API Key。將這些 Key 直接寫入代碼或配置文件是極其不安全的。GitHub Secrets 提供了一個安全的儲存方式。
-    *   進入新創建的 Repository，點擊 `Settings` -> `Secrets and variables` -> `Actions`。
-    *   點擊 `New repository secret`。
-    *   輸入 `Name` (例如 `OPENAI_API_KEY` 或 `GEMINI_API_KEY`)，並在 `Secret` 欄位粘貼你的 API Key。重複此步驟以添加所有必要的敏感資訊。
-    *   這些 Secret 在 GitHub Actions 工作流程運行時會被自動注入為環境變數，但不會暴露在日誌中。
-3.  **更新 `.gitignore`**:
-    *   確保任何可能包含敏感資訊的文件（如本地配置文件、日誌文件等）被添加到 `.gitignore` 中，以防止意外提交。例如：
+1.  **Repository 初始化：**
+    *   在 GitHub 上創建一個新的 Repository，例如 `github-ai-assistant`。
+    *   克隆 Repository 到本地或直接在 GitHub Codespaces 中打開：
+        ```bash
+        git clone https://github.com/your-username/github-ai-assistant.git
+        cd github-ai-assistant
         ```
-        # Python
-        .env
-        __pycache__/
-        *.pyc
-
-        # Node.js
-        node_modules/
-        .env
+    *   在 Repository 中建立基本的專案結構，例如：
+        ```
+        .github/workflows/  # 存放 GitHub Actions Workflow YAML 檔案
+        src/                # 存放 AI 助手的 Python/Node.js 邏輯
+        .env.example        # 範例環境變數 (不含敏感資訊)
+        README.md
         ```
 
-## 實作階段二：核心工作流程定義與自動化觸發機制
+2.  **GitHub Codespaces 配置 (選用但推薦)：**
+    *   在 GitHub Repository 頁面，點擊「Code」按鈕，選擇「Codespaces」頁籤，然後點擊「Create codespace on main」。
+    *   Codespaces 會自動啟動一個預配置的開發環境 (基於 Docker 容器)，通常包含 Python, Node.js, Git 等常用工具。
+    *   可以在 `.devcontainer/devcontainer.json` 中自定義 Codespaces 環境，例如安裝特定的擴充功能或套件。
 
-此階段是 AI 助手自動化的核心，定義了在 GitHub 中何時、如何啟動 AI 邏輯。
+3.  **環境變數 (Secrets) 管理：**
+    *   **目的：** 保護 LLM API 金鑰（如 `OPENAI_API_KEY`, `GEMINI_API_KEY`）及任何其他敏感憑證。
+    *   **步驟：**
+        1.  導航到你的 GitHub Repository -> `Settings` -> `Secrets and variables` -> `Actions`。
+        2.  點擊 `New repository secret`。
+        3.  輸入 `Name` (例如 `OPENAI_API_KEY`) 和 `Value` (你的 OpenAI API 金鑰)。
+        4.  重複此步驟添加所有必要的 LLM API 金鑰及其他敏感憑證。
+    *   **最佳實踐：**
+        *   僅授予必要的權限給這些 Secret。
+        *   定期輪換金鑰。
+        *   不要將 Secret 值硬編碼在程式碼中。
 
-### 功能與工具對應表
+4.  **GitHub App 註冊與配置 (高級應用)：**
+    *   **目的：** 如果 AI 助手需要更廣泛的 Repository 權限（例如在多個 Repository 上操作）或需要基於 Webhook 的複雜互動，則註冊 GitHub App 是最佳選擇。
+    *   **步驟：**
+        1.  前往 GitHub `Settings` -> `Developer settings` -> `GitHub Apps` -> `New GitHub App`。
+        2.  填寫 App 名稱、首頁 URL (可以是你的 Repository URL)、回調 URL (若有)。
+        3.  **配置權限 (Permissions)：** 這是最關鍵的部分。根據助手的需求，授予最低限度的權限。例如：
+            *   `Contents`: Read/Write (如果需要修改檔案，如自動提交 PR)
+            *   `Issues`: Read/Write (如果需要創建/回應 Issue)
+            *   `Pull requests`: Read/Write (如果需要審查/評論 PR)
+            *   `Discussions`: Read/Write (如果需要回應 Discussion)
+            *   `Repository Metadata`: Read (基本資訊)
+        4.  **訂閱 Webhooks (Subscribe to events)：** 選擇 AI 助手需要監聽的事件。例如：
+            *   `Issues`
+            *   `Issue comment`
+            *   `Pull request`
+            *   `Discussion`
+            *   `Push`
+        5.  創建 App 後，會生成一個 App ID。你還需要生成一個私鑰 (`Private Key`)，下載 `*.pem` 檔案，並將其內容作為一個 GitHub Secret 儲存（例如 `GH_APP_PRIVATE_KEY`）。將 App ID 也作為 Secret 儲存（`GH_APP_ID`）。
+        6.  安裝 App 到你的 Repository 或組織。
 
-| 功能模組/技術 | 具體作用 |
-| :-------------- | :------- |
-| GitHub Actions  | 核心自動化引擎，執行定義好的任務。 |
-| YAML 語法      | 定義工作流程（Workflow）的結構、步驟與觸發條件。 |
-| `on:` 觸發事件 | 指定工作流程何時啟動，如 `push`、`pull_request`、`issue_comment`、`discussion_created` 等。 |
-| `runs-on:`     | 指定工作流程執行的虛擬機環境（Runner）。 |
-| `jobs:`         | 定義一個或多個獨立的執行任務。 |
-| `steps:`        | 定義每個任務內部的具體執行步驟。 |
-| `uses:`         | 引用預定義的 Actions，如 `actions/checkout@v4`。 |
-| `run:`          | 執行 Shell 命令。 |
+## 邏輯開發階段
 
-### 實作步驟
+| 功能模組/技術 | 對應工具與技術 | 具體作用 |
+| :------------ | :------------- | :------- |
+| **AI 助手主邏輯** | Python / Node.js | 編寫 AI 助手的核心處理邏輯，包含事件解析、LLM 呼叫、結果處理與 GitHub API 互動等。選擇語言通常取決於開發者的偏好和現有生態系統。 |
+| **大語言模型整合** | OpenAI SDK / Google Gemini SDK / REST API | 提供與外部大語言模型（如 OpenAI GPT, Google Gemini）互動的介面。透過 SDK 或直接呼叫 REST API，將使用者請求傳遞給 LLM 並接收其生成的內容。 |
+| **GitHub API 互動** | `@octokit/rest` (Node.js) / `PyGithub` (Python) / GitHub REST API | 用於與 GitHub 平台進行程式化互動，讀取事件資訊、發布評論、創建 Issue 或 PR、修改檔案等。它是 AI 助手與 GitHub 生態系統「對話」的橋樑。 |
+| **事件觸發** | GitHub Webhooks | 當 GitHub 上的特定事件發生時（如新的 Issue、PR 評論、Push），GitHub 會自動發送一個 HTTP POST 請求到預先配置的 Webhook URL。這是 AI 助手「感知」GitHub 事件的機制。對於 GitHub Actions，這些 Webhook 會自動觸發其運行。 |
 
-1.  **創建工作流程文件**:
-    *   在 Repository 根目錄下創建 `.github/workflows/` 目錄。
-    *   在此目錄中創建一個 YAML 文件，例如 `ai-assistant.yml`。
-2.  **定義工作流程觸發器**:
-    *   選擇合適的 GitHub 事件來觸發 AI 助手。以下是一些常見的例子：
-        *   **針對 Pull Request 的代碼審查/建議**:
-            ```yaml
-            on:
-              pull_request:
-                types: [opened, reopened, synchronize] # PR 開啟、重開或有新提交時觸發
-            ```
-        *   **針對 Issue 評論的自動回覆/分析**:
-            ```yaml
-            on:
-              issue_comment:
-                types: [created] # 新增 Issue 評論時觸發
-            ```
-        *   **針對 Discussion 內容的總結/回答**:
-            ```yaml
-            on:
-              discussion:
-                types: [created, answered] # 新增 Discussion 或被標記為回答時觸發
-            ```
-        *   **排程任務（例如定期生成報告）**:
-            ```yaml
-            on:
-              schedule:
-                - cron: '0 0 * * *' # 每天 UTC 00:00 執行
-            ```
-        *   **手動觸發（方便測試與臨時使用）**:
-            ```yaml
-            on:
-              workflow_dispatch:
-                inputs:
-                  prompt:
-                    description: 'Enter your AI prompt'
-                    required: true
-                    default: 'Summarize the latest changes.'
-            ```
-3.  **定義工作流程 Job 與 Steps**:
-    *   一個基礎的 `ai-assistant.yml` 範例如下，觸發事件為 `issue_comment`：
-        ```yaml
-        name: AI Comment Assistant
+### 實作步驟：
 
-        on:
-          issue_comment:
-            types: [created]
+1.  **選擇程式語言與框架：**
+    *   **Python:** 常用於 AI/ML 領域，擁有豐富的 LLM SDK 和 GitHub API 客戶端（如 `PyGithub`, `python-dotenv`, `openai`, `google-generative-ai`）。
+    *   **Node.js:** 適用於 Web 開發者，擁有成熟的 GitHub API 客戶端（`@octokit/rest`, `probot`），以及 LLM SDK（`openai`, `@google/generative-ai`）。
+    *   本報告將以 **Python** 為例進行說明。
 
-        jobs:
-          process_comment:
-            runs-on: ubuntu-latest # 在最新的 Ubuntu 虛擬機上運行
-            permissions:
-              issues: write # 授予寫入 Issue 的權限，以便 AI 回覆
-              pull-requests: write # 如果需要操作 PR 也需要此權限
-
-            steps:
-              - name: Checkout repository code
-                uses: actions/checkout@v4 # 檢查 Repository 代碼，以便訪問腳本
-
-              - name: Set up Python
-                uses: actions/setup-python@v5 # 配置 Python 環境
-                with:
-                  python-version: '3.10' # 指定 Python 版本
-
-              - name: Install dependencies
-                run: |
-                  python -m pip install --upgrade pip
-                  pip install -r requirements.txt # 安裝 AI 助手所需的 Python 庫，例如 openai, PyGithub
-
-              - name: Run AI assistant script
-                id: ai_response # 為此步驟設置一個 ID
-                env:
-                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # 將 Secrets 注入為環境變數
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub Actions 自動提供的 Token，用於 GitHub API 互動
-                  ISSUE_COMMENT_BODY: ${{ github.event.comment.body }} # 將 Issue 評論內容傳遞給腳本
-                  ISSUE_NUMBER: ${{ github.event.issue.number }} # 將 Issue 編號傳遞給腳本
-                  REPOSITORY: ${{ github.repository }} # 傳遞 Repository 名稱
-                run: python .github/scripts/ai_processor.py # 執行 AI 處理腳本
-
-              # 根據 AI 腳本的輸出，判斷是否需要進一步操作 (例如發布評論)
-              # - name: Post AI response to Issue
-              #   if: success() && steps.ai_response.outputs.generated_comment # 假設腳本會輸出一個 generated_comment
-              #   uses: actions/github-script@v6
-              #   with:
-              #     script: |
-              #       const issueNumber = context.issue.number;
-              #       const commentBody = process.env.GENERATED_COMMENT; // 從環境變數獲取 AI 生成的評論
-              #       github.rest.issues.createComment({
-              #         issue_number: issueNumber,
-              #         owner: context.repo.owner,
-              #         repo: context.repo.repo,
-              #         body: commentBody
-              #       });
+2.  **安裝依賴：**
+    *   在 Codespaces 終端機或本地環境中：
+        ```bash
+        pip install openai google-generative-ai PyGithub python-dotenv
         ```
+    *   創建 `requirements.txt` 檔案並提交到 Repository。
 
-## 實作階段三：AI 邏輯開發與外部大語言模型整合
-
-此階段專注於撰寫 AI 助手的核心邏輯，使其能夠理解輸入、呼叫 LLM 並生成回應。
-
-### 功能與工具對應表
-
-| 功能模組/技術 | 具體作用 |
-| :-------------- | :------- |
-| Python / Node.js | 撰寫 AI 助手的核心邏輯與 API 互動代碼。 |
-| `requests` (Python) / `axios` (Node.js) / 官方 SDKs | 負責與外部 LLM 服務（如 OpenAI, Gemini）進行 REST API 通訊。 |
-| GitHub API Client Libraries | `PyGithub` (Python) 或 `octokit.js` (Node.js) / `@actions/github` (GitHub Actions Toolkit) 用於簡化與 GitHub REST API 的互動。 |
-| GitHub Codespaces | 提供即時、雲端開發環境，方便快速迭代與測試。 |
-
-### 實作步驟
-
-1.  **設置開發環境（可選 GitHub Codespaces）**:
-    *   在 Repository 頁面，點擊 `Code` -> `Codespaces` -> `Create codespace on main`。
-    *   Codespaces 會自動配置一個基於 VS Code 的開發環境，預裝 Git、Python/Node.js 等。這讓開發者可以直接在瀏覽器中編寫、調試代碼。
-    *   你也可以在本地環境進行開發。
-2.  **創建 AI 處理腳本**:
-    *   在 `.github/scripts/` 目錄中創建一個 Python 或 Node.js 腳本，例如 `ai_processor.py`。
-    *   此腳本將接收來自 GitHub Actions 的事件數據，處理 AI 邏輯，並使用 GitHub API 進行回覆。
-3.  **整合 LLM API（以 Python + OpenAI 為例）**:
-    *   在 `requirements.txt` 中添加 `openai` 和 `PyGithub`：
-        ```
-        openai
-        PyGithub
-        ```
-    *   `ai_processor.py` 腳本範例：
+3.  **編寫 AI 助手核心邏輯 (例如 `src/ai_assistant.py`)：**
+    *   **解析事件：**
         ```python
         import os
-        from openai import OpenAI
+        import json
         from github import Github
+        from openai import OpenAI
+        # from google.generativeai import GenerativeModel # for Gemini
 
-        # 從環境變數獲取 GitHub Actions 傳遞的資訊
-        OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
-        GITHUB_TOKEN = os.getenv('GITHUB_TOKEN')
-        ISSUE_COMMENT_BODY = os.getenv('ISSUE_COMMENT_BODY')
-        ISSUE_NUMBER = os.getenv('ISSUE_NUMBER')
-        REPOSITORY_FULL_NAME = os.getenv('REPOSITORY') # 格式: owner/repo_name
+        def get_github_event_payload():
+            # GitHub Actions 會將事件 payload 存儲在 GITHUB_EVENT_PATH 環境變數中
+            event_path = os.getenv('GITHUB_EVENT_PATH')
+            if event_path:
+                with open(event_path, 'r') as f:
+                    return json.load(f)
+            return None
 
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        g = Github(GITHUB_TOKEN)
-        repo = g.get_user().get_repo(REPOSITORY_FULL_NAME.split('/')[1]) # 假設 TOKEN 有足夠權限直接獲取repo
+        def main():
+            event_payload = get_github_event_payload()
+            if not event_payload:
+                print("Could not retrieve GitHub event payload.")
+                return
 
-        def generate_ai_response(prompt_text):
-            try:
-                response = client.chat.completions.create(
-                    model="gpt-4o", # 或 gpt-3.5-turbo, gemini-pro 等
-                    messages=[
-                        {"role": "system", "content": "You are a helpful GitHub assistant that provides concise and accurate information."},
-                        {"role": "user", "content": prompt_text}
-                    ],
-                    max_tokens=500
-                )
-                return response.choices[0].message.content.strip()
-            except Exception as e:
-                return f"Error generating AI response: {e}"
+            # 初始化 GitHub 客戶端 (使用 GITHUB_TOKEN for Actions)
+            github_token = os.getenv('GITHUB_TOKEN')
+            g = Github(github_token)
+            repo_name = os.getenv('GITHUB_REPOSITORY')
+            repo = g.get_repo(repo_name)
 
-        def post_github_comment(issue_num, comment_body):
-            try:
-                issue = repo.get_issue(int(issue_num))
-                issue.create_comment(comment_body)
-                print(f"Posted comment to Issue #{issue_num}")
-            except Exception as e:
-                print(f"Error posting comment: {e}")
+            # 初始化 LLM 客戶端
+            openai_api_key = os.getenv('OPENAI_API_KEY')
+            openai_client = OpenAI(api_key=openai_api_key)
+
+            # 根據事件類型進行處理
+            if 'issue' in event_payload and 'action' in event_payload:
+                if event_payload['action'] == 'opened':
+                    issue = repo.get_issue(number=event_payload['issue']['number'])
+                    print(f"New Issue opened: {issue.title}")
+                    # 使用 LLM 生成回應
+                    prompt = f"Summarize the following GitHub issue and suggest initial steps:\nTitle: {issue.title}\nBody: {issue.body}"
+                    try:
+                        response = openai_client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=[
+                                {"role": "system", "content": "You are a helpful AI assistant for GitHub issues."},
+                                {"role": "user", "content": prompt}
+                            ]
+                        )
+                        llm_response = response.choices[0].message.content
+                        issue.create_comment(f"Hello @{event_payload['issue']['user']['login']}!\n\n{llm_response}\n\n_This comment was generated by an AI assistant._")
+                        print("AI assistant commented on the issue.")
+                    except Exception as e:
+                        print(f"Error calling OpenAI API: {e}")
+                elif event_payload['action'] == 'created' and 'comment' in event_payload and 'issue' in event_payload:
+                    # 處理 Issue 評論事件
+                    comment_body = event_payload['comment']['body']
+                    issue = repo.get_issue(number=event_payload['issue']['number'])
+                    # 判斷是否需要 AI 回應 (例如，評論中包含特定關鍵字或被提及)
+                    if "@ai-assistant" in comment_body.lower():
+                        prompt = f"The user commented on issue '{issue.title}' with: '{comment_body}'. Provide a helpful follow-up response."
+                        try:
+                            response = openai_client.chat.completions.create(
+                                model="gpt-3.5-turbo",
+                                messages=[
+                                    {"role": "system", "content": "You are a helpful AI assistant for GitHub issues."},
+                                    {"role": "user", "content": prompt}
+                                ]
+                            )
+                            llm_response = response.choices[0].message.content
+                            issue.create_comment(f"@{event_payload['comment']['user']['login']} {llm_response}\n\n_This response was generated by an AI assistant._")
+                            print("AI assistant replied to comment.")
+                        except Exception as e:
+                            print(f"Error calling OpenAI API: {e}")
+
+            elif 'pull_request' in event_payload and 'action' in event_payload:
+                if event_payload['action'] == 'opened':
+                    pr = repo.get_pull(number=event_payload['pull_request']['number'])
+                    print(f"New Pull Request opened: {pr.title}")
+                    # 可在此處添加 PR 摘要或初步程式碼審查邏輯
+                    # 示例：生成 PR 摘要
+                    prompt = f"Summarize the purpose of this pull request:\nTitle: {pr.title}\nBody: {pr.body}"
+                    try:
+                        response = openai_client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=[
+                                {"role": "system", "content": "You are a helpful AI assistant for GitHub pull requests."},
+                                {"role": "user", "content": prompt}
+                            ]
+                        )
+                        llm_response = response.choices[0].message.content
+                        pr.create_issue_comment(f"Hello @{event_payload['pull_request']['user']['login']}!\n\nHere's a summary of your PR:\n\n{llm_response}\n\n_This comment was generated by an AI assistant._")
+                        print("AI assistant summarized the PR.")
+                    except Exception as e:
+                        print(f"Error calling OpenAI API: {e}")
+            # ... 其他事件類型處理 (discussion, push 等)
 
         if __name__ == "__main__":
-            if ISSUE_COMMENT_BODY and ISSUE_NUMBER:
-                print(f"Received issue comment for Issue #{ISSUE_NUMBER}: {ISSUE_COMMENT_BODY}")
-
-                # 構建給 LLM 的 Prompt (這裡可以根據實際需求更複雜)
-                prompt = f"A user commented on GitHub Issue #{ISSUE_NUMBER} with the following text: '{ISSUE_COMMENT_BODY}'. Please provide a helpful and concise response. Avoid conversational greetings."
-
-                ai_response = generate_ai_response(prompt)
-                print(f"AI Generated Response: {ai_response}")
-
-                # 將 AI 回應回覆到 GitHub Issue
-                if ai_response:
-                    post_github_comment(ISSUE_NUMBER, ai_response)
-                
-                # 輸出到 GitHub Actions log 或作為 output
-                # print(f"::set-output name=generated_comment::{ai_response}") # 舊版語法
-                # 建議新版做法：
-                # with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
-                #    print(f'generated_comment={ai_response}', file=f)
-            else:
-                print("No issue comment body or issue number found in environment variables.")
-
+            main()
         ```
-4.  **將 AI 助手的回應發布回 GitHub (透過 GitHub API)**:
-    *   在上述 Python 腳本中，我們使用了 `PyGithub` 庫來與 GitHub API 互動，例如 `issue.create_comment()`。
-    *   另一種方式是在 GitHub Actions 工作流程中，使用 `actions/github-script` 或 `octokit.js` (Node.js) 來直接調用 GitHub REST API，如前面 `ai-assistant.yml` 註釋掉的 Post AI response 步驟所示。
-    *   需要注意的是，如果使用 `GITHUB_TOKEN`，其權限範圍由工作流程定義文件中的 `permissions` 塊控制。如果需要更多權限，可能需要創建一個 GitHub App。
+    *   **LLM 整合：** 使用 `openai` 或 `google-generative-ai` SDK 進行 `chat.completions.create` (OpenAI) 或 `generate_content` (Gemini) 呼叫。
+    *   **GitHub API 互動：** 使用 `PyGithub` 物件 (`issue.create_comment()`, `pr.create_issue_comment()`) 執行操作。
+    *   **錯誤處理與日誌：** 加入 `try-except` 區塊處理 API 呼叫失敗，並列印有意義的日誌。
 
-## 實作階段四：部署、測試與迭代
+## 自動化觸發與運行階段
 
-此階段涵蓋將 AI 助手部署到 GitHub 並進行測試，確保其按預期工作，並根據反饋進行優化。
+| 功能模組/技術 | 對應工具與技術 | 具體作用 |
+| :------------ | :------------- | :------- |
+| **自動化工作流程** | GitHub Actions Workflow (YAML) | 定義 AI 助手在何種事件觸發下運行、運行在哪種環境中、執行哪些步驟。這是驅動整個 AI 助手的核心自動化引擎。 |
+| **觸發機制** | GitHub Actions `on:` 關鍵字 (例如 `on: push`, `on: pull_request`, `on: issues`, `on: discussion`, `on: issue_comment`) | 指定監聽的 GitHub 事件類型，當這些事件發生時，相關的 Workflow 將被自動觸發執行。 |
+| **執行環境** | GitHub Actions Runners (Ubuntu, Windows, macOS) | 提供虛擬機器或容器來執行 Workflow 中定義的步驟。這些 Runner 會自動獲取 Repository 程式碼，並執行 Python/Node.js 腳本。 |
+| **權限配置** | GitHub Actions `permissions` 關鍵字 / `GITHUB_TOKEN` | 控制 Workflow 在執行時對 Repository 的讀寫權限。`GITHUB_TOKEN` 是 GitHub Actions 提供的臨時憑證，可根據 Workflow 的 `permissions` 設定自動調整權限。 |
 
-### 功能與工具對應表
+### 實作步驟：
 
-| 功能模組/技術 | 具體作用 |
-| :-------------- | :------- |
-| GitHub Actions  | 執行 CI/CD 流程，在每次 `push` 或特定事件後自動運行測試與部署。 |
-| GitHub Webhooks | 觸發 GitHub Actions 工作流程，實現事件驅動的自動化。 |
-| Repository `Actions` Tab | 查看工作流程執行狀態、日誌與錯誤信息。 |
-| `workflow_dispatch` 觸發器 | 提供手動測試工作流程的方式，方便調試。 |
+1.  **創建 GitHub Actions Workflow 檔案：**
+    *   在 Repository 根目錄下創建 `.github/workflows/ai_assistant.yml` 檔案。
 
-### 實作步驟
+2.  **定義 Workflow：**
+    *   **觸發機制：** 根據 AI 助手的用途，設定合適的 `on:` 事件。
+        ```yaml
+        name: AI Assistant
 
-1.  **提交代碼**:
-    *   將所有 AI 助手相關的代碼（包括 `.github/workflows/ai-assistant.yml`, `.github/scripts/ai_processor.py`, `requirements.txt` 等）提交到 Repository 的 `main` 分支。
-    *   例如：
-        ```bash
+        on:
+          issues:
+            types: [opened, edited, deleted, reopened, closed] # 處理 Issue 開啟、編輯、關閉等事件
+          issue_comment:
+            types: [created] # 處理 Issue 評論創建事件
+          pull_request:
+            types: [opened, edited, reopened, synchronize] # 處理 PR 開啟、編輯、更新等事件
+          discussion:
+            types: [created, answered, reopened] # 處理討論區創建、回答等事件
+          # push:
+          #   branches: [ main ] # 如果需要基於程式碼提交進行分析 (例如自動生成 Release Note)
+          workflow_dispatch: # 允許手動觸發
+        ```
+    *   **工作定義 (Job Definition)：**
+        ```yaml
+        jobs:
+          run_ai_assistant:
+            runs-on: ubuntu-latest # 在 Ubuntu 環境下運行
+            permissions: # 為此 job 配置最低限度的權限
+              issues: write
+              pull-requests: write
+              discussions: write
+              contents: read # 讀取 Repository 內容，執行腳本
+              # 確保有權限讀取事件 payload
+              # 如果需要更廣泛的寫入權限，請根據需求調整
+
+            steps:
+              - name: Checkout code
+                uses: actions/checkout@v4 # 將 Repository 程式碼拉取到 Runner 上
+
+              - name: Set up Python
+                uses: actions/setup-python@v5
+                with:
+                  python-version: '3.x' # 指定 Python 版本
+
+              - name: Install dependencies
+                run: pip install -r requirements.txt # 安裝在 src/ai_assistant.py 中使用的依賴
+
+              - name: Run AI Assistant
+                env:
+                  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} # 注入 LLM API 金鑰
+                  # GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # 如果使用 Gemini
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub Actions 自動提供的 token
+                run: python src/ai_assistant.py # 執行 AI 助手腳本
+        ```
+    *   **權限配置 (`permissions`)：** `GITHUB_TOKEN` 是 GitHub Actions 內建的 Token，其權限預設是受限的。為了讓 AI 助手能夠發布評論、創建 Issue 等，必須在 Workflow 或 Job 層級明確聲明所需的權限。遵循最小權限原則。
+
+3.  **提交程式碼：**
+    *   將 `src/ai_assistant.py`、`.github/workflows/ai_assistant.yml` 和 `requirements.txt` 等檔案提交到 GitHub Repository。
+    *   ```bash
         git add .
-        git commit -m "feat: Implement initial AI assistant for issue comments"
+        git commit -m "feat: Add initial AI assistant workflow"
         git push origin main
         ```
-2.  **觸發與測試**:
-    *   根據您在 `ai-assistant.yml` 中定義的觸發器類型進行操作。
-    *   **例如，如果是 `on: issue_comment`**: 前往 Repository 的 `Issues` 頁面，找到一個 Issue 並新增一條評論。
-    *   **例如，如果是 `on: workflow_dispatch`**: 前往 Repository 的 `Actions` 頁面，找到您的工作流程，點擊 `Run workflow` 手動觸發。
-3.  **監控與調試**:
-    *   在 Repository 的 `Actions` Tab 中，您會看到您的工作流程正在運行或已完成。
-    *   點擊運行中的工作流程，可以查看每個 Job 和 Step 的詳細日誌輸出。
-    *   檢查日誌中的錯誤信息，例如 API 錯誤、權限問題、腳本錯誤等，並根據日誌進行調試。
-    *   GitHub Actions 的日誌對於排查問題至關重要，確保您的腳本有足夠的 `print()` 或 `console.log()` 語句。
-4.  **迭代與優化**:
-    *   根據測試結果和用戶反饋，持續優化 AI 助手的邏輯、Prompt 工程、錯誤處理機制等。
-    *   例如，改進 Prompt 讓 LLM 的回覆更符合預期；增加對不同事件類型的處理；優化性能以減少執行時間。
 
-## 技術力分析：在 GitHub 上運行 AI 助手時的技術門檻
+4.  **測試：**
+    *   在 Repository 中手動創建一個新的 Issue，或發布一個新的 PR。
+    *   觀察 Actions 頁籤，確認 `AI Assistant` Workflow 是否被觸發並成功運行。
+    *   檢查 Issue/PR 下方是否有 AI 助手生成的評論。
 
-在 GitHub 上構建和運行 AI 助手，雖然提供了強大的自動化能力，但也伴隨著一些開發者需要應對的技術門檻。
+## 技術力分析
 
-### 1. API 速率限制 (Rate Limiting)
+在 GitHub 上運行 AI 助手，雖然極大簡化了部署和集成過程，但也帶來了特定的技術挑戰和門檻。
 
-*   **問題描述**: GitHub REST API 和外部 LLM API 都設有速率限制，以防止濫用。如果 AI 助手在短時間內發送大量請求，可能會觸發這些限制，導致請求失敗或被臨時禁用。
-    *   **GitHub API 限制**: 對於未經身份驗證的請求，限制為每小時 60 個請求。對於使用 Personal Access Token (PAT) 或 GitHub App 的請求，限制為每小時 5000 個請求（或更高，取決於 App 的類型和組織計劃）。
-    *   **LLM API 限制**: OpenAI、Google Gemini 等服務也有其自己的每分鐘請求數 (RPM) 和每分鐘令牌數 (TPM) 限制，這會根據您的訂閱計劃動態調整。
-*   **技術解決方案**:
-    *   **指數退避 (Exponential Backoff)**: 在 API 請求失敗時，等待一段逐漸增長的時間後再重試。大多數 HTTP 客戶端庫（如 `requests`）都支持或有擴展可以實現此功能。
-    *   **批量處理 (Batching)**: 盡可能將多個相關操作合併為一個 API 請求，減少請求總數。
-    *   **令牌管理 (Token Management)**: 對於 LLM API，監控每次請求的令牌使用情況，並確保不超過 TPM 限制。
-    *   **異步處理 (Asynchronous Processing)**: 對於需要大量並行請求的場景，使用異步請求可以更高效地利用時間，但在 GitHub Actions 的單個 Job 中，這需要精心設計。
-    *   **緩存 (Caching)**: 對於不經常變化的數據，實施緩存機制，減少不必要的 API 調用。
+1.  **API 速率限制 (Rate Limiting)：**
+    *   **GitHub API Rate Limits:** GitHub 對於 REST API 和 GraphQL API 的請求量都有嚴格的限制。對於經過驗證的請求（例如 `GITHUB_TOKEN` 或 GitHub App 憑證），通常每小時有 5000 次請求的限制。如果 AI 助手需要處理大量事件或對大量資源進行操作，很容易觸發此限制。
+        *   **應對策略：**
+            *   **優化請求：** 批量操作、減少不必要的 API 呼叫。
+            *   **錯誤處理與重試：** 實施指數退避 (Exponential Backoff) 機制，當遇到 `429 Too Many Requests` 錯誤時等待並重試。
+            *   **使用 GraphQL API：** GraphQL 可以一次性請求多個資源，減少往返次數。
+            *   **GitHub Apps：** GitHub Apps 的速率限制通常更高 (或基於安裝數量)，這使其成為處理大量事件的更好選擇。
+    *   **LLM API Rate Limits:** 外部 LLM 提供商（如 OpenAI, Google Gemini）也對每分鐘的請求量 (RPM) 和每分鐘的 Token 數 (TPM) 設有速率限制。這直接影響 AI 助手處理並行請求的能力。
+        *   **應對策略：**
+            *   **非同步處理：** 對於多個獨立的 LLM 請求，使用非同步程式設計（如 Python 的 `asyncio`）來管理併發，但仍需遵守總體速率限制。
+            *   **請求隊列：** 建立一個內部請求隊列，控制向 LLM API 發送請求的速度。
+            *   **升級訂閱計劃：** 提高 LLM 服務的速率限制。
 
-### 2. 權限範圍 (Scope) 設定安全性
+2.  **權限範圍 (Scope) 設定安全性：**
+    *   **`GITHUB_TOKEN` 與 `permissions` 關鍵字：** GitHub Actions 使用 `GITHUB_TOKEN`，其權限範圍由 Workflow 檔案中的 `permissions` 關鍵字精細控制。開發者必須謹慎配置，僅授予助手完成任務所需的最小權限（Principle of Least Privilege）。過高的權限可能導致安全漏洞，例如惡意程式碼利用助手的權限修改或刪除不相關的 Repository 內容。
+    *   **GitHub Apps 的精細權限：** GitHub Apps 提供更細粒度的權限控制，可以在安裝時明確指定對特定資源（如 `issues:write`, `pull_requests:read`）的讀寫權限，並且可以將 App 安裝到組織或特定的 Repository。
+        *   **應對策略：**
+            *   仔細審查所需權限，避免使用 `contents: write` 除非絕對必要。
+            *   定期審查 GitHub Actions 和 GitHub Apps 的權限配置。
+            *   對於開源專案，更應限制 AI 助手的寫入權限，或要求手動審批 AI 助手提出的修改。
 
-*   **問題描述**: AI 助手需要足夠的權限來讀取 Repository 內容、發布評論、創建 Pull Request 等。配置過高的權限可能帶來安全風險，而權限不足則會導致助手功能受限。
-*   **技術解決方案**:
-    *   **最小權限原則 (Principle of Least Privilege)**: 只授予 AI 助手完成其任務所需的最低限度權限。
-    *   **GitHub Actions 的 `permissions` 塊**: 在工作流程 YAML 文件中，使用 `permissions` 塊明確定義 Job 所需的權限。例如：
-        ```yaml
-        permissions:
-          contents: read      # 讀取 Repository 內容
-          issues: write       # 寫入 Issue 評論或狀態
-          pull-requests: write # 創建或更新 Pull Request
-          discussions: write  # 參與 Discussions
-        ```
-    *   **GitHub Apps**: 對於需要更精細權限控制或跨多個 Repository 工作的 AI 助手，建議創建 GitHub App。GitHub App 提供了細粒度的權限設定（例如，`Issues` 的 `Read-only` 或 `Read & write`），並且其憑證（Installation Access Token）的生命週期短，更加安全。
-    *   **Secrets 管理**: 將敏感的 API Key 存儲在 GitHub Secrets 中，並只在需要時通過環境變數注入到工作流程中。避免將敏感資訊直接硬編碼到代碼中。
-    *   **OIDC (OpenID Connect)**: 對於需要從 GitHub Actions 訪問 AWS、Azure 等外部雲服務的場景，可以利用 OIDC 進行無密鑰認證，進一步提升安全性。
+3.  **GitHub Actions 執行長度限制：**
+    *   **最長運行時間：** GitHub Actions 的每個 Job 都有執行時間限制。通常，公共 Repository 的 Job 最長可運行 6 小時，而私有 Repository 則為 360 分鐘（6 小時）。如果 AI 助手需要執行長時間的分析、大量的程式碼處理或與 LLM 進行多次複雜互動，可能會超出此限制。
+        *   **應對策略：**
+            *   **優化程式碼：** 確保 AI 助手的邏輯高效，減少不必要的計算。
+            *   **分階段執行：** 將複雜任務分解為多個獨立的 Jobs，或利用 `workflow_run` 事件在一個 Workflow 完成後觸發另一個。
+            *   **使用外部服務：** 對於真正耗時的任務，考慮將其卸載到更適合長時間運行的外部計算服務（如 AWS Lambda, Google Cloud Run），然後僅使用 GitHub Actions 作為觸發和結果發布的協調器。
+            *   **設置 `timeout-minutes`：** 在 Job 或 Step 層級設定合理的超時時間，以避免無限期運行和資源浪費。
 
-### 3. GitHub Actions 執行長度與資源限制
+4.  **成本考量：**
+    *   **GitHub Actions 分鐘數：** GitHub Actions 對於公共 Repository 通常免費提供一定數量的運行分鐘數，但私有 Repository 或超出免費額度後會產生費用。頻繁觸發、運行時間長的 Workflow 會增加成本。
+    *   **LLM Token 消耗：** 大語言模型的每次 API 呼叫都會根據輸入和輸出的 Token 數量計費。頻繁或生成長篇回應的 AI 助手會快速消耗費用。
+        *   **應對策略：**
+            *   **限制觸發頻率：** 減少不必要的 Workflow 觸發。
+            *   **縮短 LLM 提示和回應：** 優化提示詞，使其更精煉，並在可能的情況下限制 LLM 的輸出長度。
+            *   **快取機制：** 對於重複性高的請求，考慮實施快取，避免每次都呼叫 LLM。
+            *   **成本監控：** 啟用 GitHub Actions 和 LLM 服務的成本監控，及時發現並調整。
 
-*   **問題描述**: GitHub Actions 在免費帳戶和組織中都有執行時間、並行 Job 數量、存儲空間和總運行分鐘數的限制。對於需要大量計算或長時間運行的 AI 任務，這些限制可能成為瓶頸。
-    *   **執行時間限制**: 單個 Job 通常有 6 小時的運行時間限制。
-    *   **計費分鐘數**: 免費帳戶每月有一定限額的免費分鐘數（例如 2000 分鐘/月），超過後需要付費。對於大型項目，這些分鐘數可能很快被耗盡。
-    *   **並發限制**: 每個帳戶或組織的並發 Job 數量有限制。
-    *   **資源限制**: GitHub 託管的 Runner 的 CPU、RAM 和存儲空間是固定的，無法滿足某些高性能 AI 模型的運行需求。
-*   **技術解決方案**:
-    *   **優化 AI 腳本效率**:
-        *   **精簡代碼**: 確保 AI 處理邏輯高效，減少不必要的計算。
-        *   **選擇輕量級 LLM 模型**: 針對特定任務，選擇更小、更快的模型，而不是一味追求最大模型。
-        *   **避免重複計算**: 善用緩存，避免在每次執行時都重新處理相同的數據。
-    *   **合理使用 `if` 條件**: 僅在必要時運行特定的步驟或 Job，例如：`if: github.event.sender.login == 'bot-username'` 防止 AI 助手無限循環觸發自己。
-    *   **Self-hosted Runners**: 對於需要特定硬體（如 GPU）或更長執行時間的任務，可以設置自託管 Runner。這樣可以完全控制底層硬件和環境，但需要自行管理。
-    *   **細分工作流程**: 將複雜的 AI 任務拆分為多個小的、可並行的工作流程，或者使用 `needs` 關鍵字來控制 Job 之間的依賴關係，以便更高效地利用 Runner 資源。
-    *   **監控與預算**: 定期檢查 GitHub Actions 的使用量報告，並為 LLM API 設置預算提醒，防止意外的費用產生。
+5.  **安全性與模型濫用：**
+    *   **提示注入 (Prompt Injection)：** 惡意用戶可能會在 Issue、PR 或評論中輸入惡意提示，試圖控制 AI 助手的行為或洩露敏感資訊。
+        *   **應對策略：**
+            *   **輸入驗證與過濾：** 在將用戶輸入傳遞給 LLM 之前，進行嚴格的驗證和過濾。
+            *   **系統提示詞加固：** 使用強健的系統提示詞，明確規範 AI 助手的行為和限制。
+            *   **輸出審核：** 對於敏感操作，考慮人工審核 AI 助手的輸出結果。
+    *   **敏感資訊洩露：** 如果 AI 助手在處理過程中不小心將儲存在 Secret 中的資訊或 Repository 中的敏感程式碼片段包含在 LLM 請求中，可能導致資訊洩露。
+        *   **應對策略：**
+            *   絕不將敏感資訊直接嵌入到 LLM 提示中。
+            *   對 LLM 的輸入和輸出進行嚴格的資料清洗。
 
-### 4. Prompt 工程與模型選擇
-
-*   **問題描述**: 即使有了強大的 LLM，如何設計有效的 Prompt 以引導模型生成期望的輸出，並根據不同的 GitHub 事件選擇最合適的模型，仍然是一個挑戰。
-*   **技術解決方案**:
-    *   **清晰明確的指令**: Prompt 應盡可能清晰、具體，明確要求模型的輸出格式、語氣和內容限制。
-    *   **上下文提供**: 為模型提供足夠的上下文信息，例如 Issue 的歷史記錄、Pull Request 的代碼變更、Discussion 的相關討論等。
-    *   **Few-shot Learning**: 在 Prompt 中提供少量期望輸出範例，引導模型生成相似風格的回覆。
-    *   **模型評估與選擇**: 根據助手的具體功能（例如，總結、生成代碼、回答問題）和成本效益，選擇最合適的 LLM 模型 (e.g., `gpt-3.5-turbo` 適合快速回應，`gpt-4o` 適合複雜推理)。
-    *   **迭代與測試**: 持續測試不同的 Prompt 和模型配置，收集反饋，並進行優化。
-
-### 5. 錯誤處理與日誌記錄
-
-*   **問題描述**: 自動化流程中難免會出現錯誤，例如 API 調用失敗、腳本異常、網絡問題等。如果沒有健全的錯誤處理和日誌記錄機制，排查問題將變得非常困難。
-*   **技術解決方案**:
-    *   **`try-except` / `try-catch` 塊**: 在 AI 邏輯腳本中廣泛使用錯誤處理塊，捕獲並處理預期和非預期的異常。
-    *   **詳細日誌輸出**: 在腳本中輸出詳細的日誌，記錄關鍵步驟的執行狀態、API 請求和回應的摘要、以及任何錯誤信息。GitHub Actions 會自動收集 `stdout` 和 `stderr` 的輸出。
-    *   **GitHub Actions `fail-fast`**: 默認情況下，GitHub Actions 的 Job 會在任何 Step 失敗時停止。可以利用此特性快速發現問題。
-    *   **日誌分析工具**: 對於更複雜的部署，可以考慮將 GitHub Actions 的日誌匯總到外部日誌管理系統進行集中分析。
+6.  **維護與調試複雜性：**
+    *   **多層次抽象：** 涉及 GitHub 事件、Actions Workflow、Python/Node.js 邏輯、LLM API 多個層次的協同，調試可能變得複雜。
+    *   **版本管理：** 如何有效地版本化 AI 助手的邏輯，確保每次部署的穩定性。
+        *   **應對策略：**
+            *   **詳盡的日誌記錄：** 在 AI 助手程式碼中添加詳細的日誌，方便在 GitHub Actions 日誌中追蹤問題。
+            *   **單元測試與整合測試：** 對 AI 助手的核心邏輯進行測試。
+            *   **小步快跑：** 逐步增加功能，避免一次性引入大量複雜邏輯。
 
 ## 結論
 
-在 GitHub 環境下構建 AI 助手，是將開發工作流程自動化和智能化的一種強大方式。透過精巧地結合 GitHub Actions 的自動化能力、GitHub Apps 的深度集成與權限管理、以及 GitHub Codespaces 的便捷開發環境，我們可以創建出高效、智能且高度可擴展的 AI 助手。
+在 GitHub 環境下構建 AI 助手是一個強大且具備高度擴展性的解決方案，它能將人工智慧的能力無縫整合到開發工作流程中，大幅提升自動化水準和團隊效率。透過充分利用 GitHub Actions、GitHub Apps 和 Codespaces 等原生工具，並與 OpenAI、Google Gemini 等先進 LLM 服務串接，開發者可以創造出各種智能化的助手，從自動化程式碼審查到智能回覆 Issue，潛力無限。
 
-然而，成功的實作需要對 GitHub 的生態系統有深入理解，並能有效應對 API 速率限制、權限安全、資源配額等潛在技術門檻。通過遵循最小權限原則、優化代碼效率、採用適當的錯誤處理和日誌記錄策略，開發者可以最大化 AI 助手的效益，同時確保系統的穩定性與安全性。隨著 AI 技術的進步，GitHub 原生 AI 助手將在未來扮演越來越重要的角色，從而徹底改變開發、維護和協作軟體的方式。
+然而，成功的實施需要對 GitHub 生態系統、LLM 集成以及伴隨的技術挑戰有深刻理解。開發者必須謹慎處理速率限制、權限配置、運行時長、成本控制和安全議題，確保助手的穩定性、效率和安全性。隨著 GitHub 和 LLM 技術的持續演進，未來的 AI 助手將會更加智能、集成度更高，為軟體開發帶來革命性的變革。
