@@ -7,39 +7,54 @@ from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 
 # --- 專業視覺參數 ---
-VECTOR_BLUE = RGBColor(0, 51, 102)  # Vector 標誌深藍
+VECTOR_BLUE = RGBColor(0, 51, 102)
 TEXT_DARK = RGBColor(33, 33, 33)
-BG_LIGHT = RGBColor(245, 245, 245)
 FONT_MAIN = 'Microsoft JhengHei'
 
-def set_cell_font(cell, size=Pt(12), bold=False):
-    """設定表格單元格字體"""
-    for paragraph in cell.text_frame.paragraphs:
-        paragraph.font.name = FONT_NAME
-        paragraph.font.size = size
-        paragraph.font.bold = bold
-        paragraph.font.color.rgb = TEXT_DARK
+def clean_md_syntax(text):
+    """🚀 核心優化 1：徹底清除 Markdown 殘留符號 (*, **, #)"""
+    if not text:
+        return ""
+    # 移除粗體 **text** -> text
+    text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+    # 移除其餘單個 * 或 _
+    text = text.replace('*', '').replace('_', '')
+    # 移除標題符號 #
+    text = text.replace('#', '').strip()
+    return text
+
+def set_title_style(title_shape, title_text):
+    """🚀 核心優化 2：動態調整標題字體大小，防止溢出"""
+    title_shape.text = title_text
+    tf = title_shape.text_frame
+    tf.word_wrap = True  # 開啟自動換行
+    
+    p = tf.paragraphs[0]
+    p.font.name = FONT_MAIN
+    p.font.bold = True
+    p.font.color.rgb = VECTOR_BLUE
+    
+    # 根據標題長度動態調整字體大小
+    char_count = len(title_text)
+    if char_count > 30:
+        p.font.size = Pt(20) # 標題超長
+    elif char_count > 20:
+        p.font.size = Pt(24) # 標題稍長
+    else:
+        p.font.size = Pt(30) # 標準長度
 
 def add_slide_with_table(prs, title, table_data):
-    """為表格內容獨立建立一張投影片"""
+    """建立帶有美化表格的投影片"""
     slide = prs.slides.add_slide(prs.slide_layouts[1])
-    slide.shapes.title.text = f"{title} - 硬體對應"
+    set_title_style(slide.shapes.title, f"{title} - 硬體對應表")
     
-    # 設定標題樣式
-    title_para = slide.shapes.title.text_frame.paragraphs[0]
-    title_para.font.color.rgb = VECTOR_BLUE
-    title_para.font.name = FONT_MAIN
-
     if not table_data: return
 
     rows = len(table_data)
     cols = len(table_data[0])
     
-    # 計算表格位置 (居中且佔滿寬度)
-    left = Inches(0.5)
-    top = Inches(1.5)
-    width = Inches(9.0)
-    height = Inches(0.6 * rows)
+    left, top = Inches(0.5), Inches(1.5)
+    width, height = Inches(9.0), Inches(0.6 * rows)
     
     shape = slide.shapes.add_table(rows, cols, left, top, width, height)
     table = shape.table
@@ -47,18 +62,21 @@ def add_slide_with_table(prs, title, table_data):
     for r, row in enumerate(table_data):
         for c, cell_text in enumerate(row):
             cell = table.cell(r, c)
-            cell.text = cell_text.strip()
-            # 表格標題行美化
+            # 清洗表格內的文字
+            cell.text = clean_md_syntax(cell_text)
+            
+            # 表格標題樣式
             if r == 0:
                 cell.fill.solid()
                 cell.fill.fore_color.rgb = VECTOR_BLUE
                 for p in cell.text_frame.paragraphs:
                     p.font.color.rgb = RGBColor(255, 255, 255)
                     p.font.bold = True
-                    p.font.size = Pt(12)
+                    p.font.size = Pt(11)
+                    p.font.name = FONT_MAIN
             else:
                 for p in cell.text_frame.paragraphs:
-                    p.font.size = Pt(11)
+                    p.font.size = Pt(10)
                     p.font.name = FONT_MAIN
 
 def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pptx"):
@@ -75,24 +93,19 @@ def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pp
     current_table = []
     
     def flush_content():
-        """將目前暫存的內容寫入投影片並清空"""
         nonlocal current_bullets, current_table
         if current_bullets:
             slide = prs.slides.add_slide(prs.slide_layouts[1])
-            slide.shapes.title.text = current_slide_title
-            # 設定標題字體
-            title_para = slide.shapes.title.text_frame.paragraphs[0]
-            title_para.font.color.rgb = VECTOR_BLUE
-            title_para.font.name = FONT_MAIN
+            set_title_style(slide.shapes.title, current_slide_title)
             
             tf = slide.placeholders[1].text_frame
             tf.word_wrap = True
             for b in current_bullets:
                 p = tf.add_paragraph()
-                p.text = b
+                p.text = clean_md_syntax(b) # 清洗內容中的 *
                 p.font.size = Pt(18)
                 p.font.name = FONT_MAIN
-                p.space_after = Pt(10)
+                p.space_after = Pt(8)
             current_bullets = []
             
         if current_table:
@@ -101,44 +114,39 @@ def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pp
 
     # --- 標題首頁 ---
     slide = prs.slides.add_slide(prs.slide_layouts[0])
+    # 首頁大標題也可以清洗
     slide.shapes.title.text = "Vector Informatik\n充電通訊協議與硬體對應研究"
-    slide.placeholders[1].text = f"技術專家報告\n日期：{os.path.getmtime(md_file)}"
+    slide.placeholders[1].text = f"技術專家報告\n日期：{time.strftime('%Y-%m-%d')}"
 
-    # --- 解析 Markdown ---
     for line in lines:
         line = line.strip()
         if not line or line.startswith('---'): continue
 
-        # 1. 偵測大標題 (協定名稱) -> 重設標題
         if line.startswith('## '):
             flush_content()
-            current_slide_title = line.replace('## ', '').replace('協定名稱：', '').strip()
+            current_slide_title = clean_md_syntax(line)
             
-        # 2. 偵測小標題 (描述、對應表、門檻) -> 強制換頁
         elif line.startswith('### '):
             flush_content()
-            sub_title = line.replace('### ', '').strip()
+            sub_title = clean_md_syntax(line)
             current_slide_title = f"{current_slide_title} - {sub_title}"
 
-        # 3. 偵測表格行
         elif line.startswith('|'):
             if '---' in line: continue
             cells = [c.strip() for c in line.split('|') if c.strip()]
             if cells: current_table.append(cells)
 
-        # 4. 偵測清單
         elif line.startswith(('* ', '- ', '1. ', '2. ')):
-            clean_bullet = re.sub(r'^(\*|-|\d+\.)\s+', '', line)
-            current_bullets.append(clean_bullet)
+            current_bullets.append(line)
         
-        # 5. 一般段落文字
         elif len(line) > 5 and not line.startswith('|'):
             current_bullets.append(line)
 
-    flush_content() # 處理最後殘留內容
+    flush_content()
     prs.save(output_file)
-    print(f"✅ 專業 PPT 已產生：{output_file}")
+    print(f"✅ 優化版 PPT 已產生：{output_file}")
 
+import time
 if __name__ == "__main__":
     target = sys.argv[1] if len(sys.argv) > 1 else "reports/report_001.md"
     create_pptx_from_md(target)
