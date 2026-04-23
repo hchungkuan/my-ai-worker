@@ -7,20 +7,20 @@ from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 
-def create_pptx_from_text(text, filename="Vector_Research.pptx"):
+def create_pptx_from_text(text, title_context, filename="Technical_Research.pptx"):
     """將 AI 輸出的結構化文字轉為美化後的 PPTX 檔案"""
     prs = Presentation()
     
     # --- 1. 加入總標題首頁 ---
     title_slide_layout = prs.slide_layouts[0]
     slide = prs.slides.add_slide(title_slide_layout)
-    title = slide.shapes.title
+    title_shape = slide.shapes.title
     subtitle = slide.placeholders[1]
     
-    title.text = "Vector Informatik 技術研究報告"
-    subtitle.text = f"由 AI 助理自動生成\n日期：{time.strftime('%Y-%m-%d')}"
+    # 使用 Issue 標題作為簡報標題
+    title_shape.text = f"{title_context} 技術研究報告"
+    subtitle.text = f"由 AI 技術助理自動生成\n日期：{time.strftime('%Y-%m-%d')}"
     
-    # 設定首頁字體為微軟正黑體
     for shape in slide.shapes:
         if shape.has_text_frame:
             for paragraph in shape.text_frame.paragraphs:
@@ -37,43 +37,41 @@ def create_pptx_from_text(text, filename="Vector_Research.pptx"):
         title_text = lines[0].strip()
         bullet_points = lines[1:]
         
-        # 加入一張「標題+內容」的投影片 (版面 1)
         slide_layout = prs.slide_layouts[1]
         slide = prs.slides.add_slide(slide_layout)
         
-        # --- 優化標題格式 ---
+        # 標題格式 (保持專業藍色調，但不寫死品牌名)
         title_shape = slide.shapes.title
         title_shape.text = title_text
         title_frame = title_shape.text_frame
         for p in title_frame.paragraphs:
             p.font.bold = True
-            p.font.size = Pt(32)
+            p.font.size = Pt(28) # 稍微縮小以適應長標題
             p.font.name = 'Microsoft JhengHei'
-            p.font.color.rgb = RGBColor(0, 51, 102) # Vector 深藍色風格
+            p.font.color.rgb = RGBColor(0, 51, 102) 
 
-        # --- 優化內文內容 ---
         if bullet_points:
             body_shape = slide.placeholders[1]
             tf = body_shape.text_frame
-            tf.word_wrap = True # 自動換行
+            tf.word_wrap = True
             
             for point in bullet_points:
-                # 移除 AI 產出的多餘符號如 * 或 -
                 clean_point = point.strip().lstrip('-').lstrip('*').strip()
                 if clean_point:
                     p = tf.add_paragraph()
                     p.text = clean_point
                     p.font.size = Pt(20)
                     p.font.name = 'Microsoft JhengHei'
-                    p.space_after = Pt(12) # 設定段落間距，避免文字太擠
+                    p.space_after = Pt(12)
                     p.level = 0
     
     prs.save(filename)
-    print(f"✅ 成功產生優化美化版 PPT 檔案：{filename}", file=sys.stderr)
+    print(f"✅ 成功產生技術報告 PPT：{filename}", file=sys.stderr)
 
 def main():
     api_key = os.environ.get("GEMINI_API_KEY")
-    issue_text = os.environ.get("ISSUE_BODY", "沒有研究主題")
+    issue_title = os.environ.get("ISSUE_TITLE", "技術研究主題") # 🚀 新增：讀取 Issue 標題
+    issue_body = os.environ.get("ISSUE_BODY", "未提供詳細內容")
     label = os.environ.get("TRIGGER_LABEL", "research")
     
     if not api_key:
@@ -82,33 +80,27 @@ def main():
 
     client = genai.Client(api_key=api_key)
     
-    # 🧠 根據標籤切換 Prompt 與身份
+    # 🧠 根據標籤切換通用的技術專家身份
     if label == "presentation":
-        system_instruction = "你是一位資深的車用電子技術顧問，擅長製作 Vector Informatik 產品方案的專業簡報。"
+        system_instruction = "你是一位資深的技術諮詢顧問，擅長分析複雜技術架構並製作專業的簡報結構。"
         prompt = f"""
-        請針對以下主題製作 PPT 結構，直接以文字格式輸出。
+        請針對主題【{issue_title}】製作 PPT 結構。
         
-        【內容架構要求】：
-        1. 議程 (Agenda)：列出本次研究的關鍵章節。
-        2. 充電協定解析：主動找出對應的 ISO 15118 (-2, -20), DIN 70121 等標準。
-        3. 硬體工具映射：對應 VH5110A, VN 系列, VT System 等 Vector 設備。
-        4. 技術挑戰分析：深入分析實作中的技術門檻（如 PLC 訊號、TLS 加密）。
-        5. 總結與展望。
+        【內容要求】：
+        1. 議程 (Agenda)：列出研究關鍵章節。
+        2. 技術背景與現狀：說明此技術的核心標準與發展。
+        3. 核心解決方案：找出與此主題相關的主流硬體設備或軟體工具。
+        4. 技術挑戰分析：分析實作中的難點與關鍵技術門檻。
+        5. 總結與未來展望。
 
         【格式規範】：
-        1. 每張投影片以 'Slide:' 開頭。
-        2. 內容精煉，每張投影片不超過 5 個重點。
-        3. 每點字數建議在 15-20 字以內。
+        每張投影片以 'Slide:' 開頭。內容精煉，適合簡報呈現。
         
-        Slide: [投影片標題]
-        - [重點 1]
-        - [重點 2]
-
-        主題：{issue_text}
+        主題內容：{issue_body}
         """
     else:
-        system_instruction = "你是一位專精於 Vector Informatik 與 EV 充電標準的技術研究專家。"
-        prompt = f"請針對以下主題產出詳細的 Markdown 技術研究報告，包含通訊協定、硬體對應與技術分析：\n\n{issue_text}"
+        system_instruction = "你是一位專精於技術標準、系統開發與產業分析的研究專家。"
+        prompt = f"請針對【{issue_title}】產出詳細的 Markdown 技術研究報告。內容需包含技術定義、對應硬體/工具、與深度技術門檻分析：\n\n{issue_body}"
 
     max_attempts = 3
     base_delay = 20 
@@ -122,22 +114,20 @@ def main():
             )
             
             if response.text:
-                # 輸出文字結果 (給 Issue 留言用)
                 print(response.text)
-                
-                # 如果是簡報標籤，則執行 PPT 製作
                 if label == "presentation":
-                    create_pptx_from_text(response.text)
+                    # 傳入 issue_title 作為 PPT 的動態標題
+                    create_pptx_from_text(response.text, issue_title)
                 return 
             
         except Exception as e:
             error_msg = str(e)
             if i < max_attempts - 1:
                 wait_time = base_delay * (2 ** i)
-                print(f"⚠️ 嘗試失敗，將於 {wait_time} 秒後重試...", file=sys.stderr)
+                print(f"⚠️ 失敗：{error_msg[:100]}... 等待重試", file=sys.stderr)
                 time.sleep(wait_time)
             else:
-                print(f"### ❌ AI 員工在 3 次重試後仍然失敗\n最後錯誤訊息：`{error_msg}`")
+                print(f"### ❌ AI 員工執行失敗\n最後錯誤訊息：`{error_msg}`")
 
 if __name__ == "__main__":
     main()
