@@ -6,7 +6,7 @@ on:
 
 jobs:
   research_job:
-    # 🚀 修改 1：讓 research 和 presentation 標籤都能觸發這個任務
+    # 支援 research 和 presentation 兩個標籤觸發
     if: github.event.label.name == 'research' || github.event.label.name == 'presentation'
     runs-on: ubuntu-latest
     permissions:
@@ -21,18 +21,24 @@ jobs:
           python-version: '3.11'
           
       - name: Install Dependencies
-        # 🚀 修改 2：除了 Google SDK，還要安裝 python-pptx 才能製作投影片
+        # 同時安裝 AI SDK 與 PPTX 製作工具
         run: pip install google-genai python-pptx
           
-      - name: Run AI Agent
+      - name: Step 1 - Run AI Researcher
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ISSUE_BODY: ${{ github.event.issue.body }}
-          # 🚀 修改 3：將標籤名稱傳給 Python 腳本，讓它知道要執行哪種任務
           TRIGGER_LABEL: ${{ github.event.label.name }}
         run: |
-          # 執行腳本，並將輸出結果存入 report.md
-          python scripts/researcher.py | tee report.md
+          # 執行 AI 研究，並將結果存為 report.md
+          python scripts/researcher.py > report.md
+          
+      - name: Step 2 - Generate PPTX from Report
+        # 🚀 只有在標籤為 presentation 時，才執行獨立的 PPT 轉換腳本
+        if: github.event.label.name == 'presentation'
+        run: |
+          # 讀取剛剛產生的 report.md 並轉換為 PPTX
+          python scripts/create_pptx.py report.md
           
       - name: Post Report to Issue
         uses: peter-evans/create-or-update-comment@v4
@@ -40,10 +46,10 @@ jobs:
           issue-number: ${{ github.event.issue.number }}
           body-path: report.md
 
-      # 🚀 修改 4：如果是 presentation 模式，自動上傳 PPT 檔案供下載
       - name: Upload Presentation PPT
+        # 只有在標籤為 presentation 時才上傳檔案
         if: github.event.label.name == 'presentation'
         uses: actions/upload-artifact@v4
         with:
           name: Vector-Research-PPT
-          path: Vector_Research.pptx
+          path: Vector_Presentation.pptx # 確保這與你的 create_pptx.py 輸出的檔名一致
