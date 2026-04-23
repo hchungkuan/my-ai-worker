@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       filename:
-        description: '請輸入要轉換的 Markdown 檔名 (例如 report_001.md，系統會自動搜尋 reports/ 資料夾)'
+        description: '請輸入要轉換的 Markdown 檔名 (例如 20260423_Issue12_ISO15118.md)'
         required: true
         default: 'report.md'
 
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       issues: write
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
       
@@ -31,32 +31,47 @@ jobs:
       - name: Install Dependencies
         run: pip install google-genai python-pptx
           
-      - name: Step 1 - Determine Filename & Run AI
+      - name: Step 1 - Generate Meaningful Filename & Run AI
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          # 🚀 建立儲存資料夾
           mkdir -p reports
           
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            # 手動觸發模式
+            # 手動模式：直接使用輸入的名稱
             RAW_INPUT="${{ github.event.inputs.filename }}"
             echo "FINAL_FILENAME=reports/$RAW_INPUT" >> $GITHUB_ENV
             echo "DISPLAY_NAME=$RAW_INPUT" >> $GITHUB_ENV
           else
-            # 標籤觸發模式 (使用 Issue 編號)
-            FNAME_ONLY="report_${{ github.event.issue.number }}.md"
+            # 自動模式：生成有意義的檔名
+            # 1. 取得日期 (YYYYMMDD)
+            DATE=$(date +'%Y%m%d')
+            # 2. 清洗標題：將空格與特殊符號轉為底線，只保留英數與中文字
+            CLEAN_TITLE=$(echo "${{ github.event.issue.title }}" | sed 's/[[:space:]]/_/g' | sed 's/[^a-zA-Z0-9_\u4e00-\u9fa5]//g' | cut -c 1-30)
+            
+            FNAME_ONLY="${DATE}_Issue${{ github.event.issue.number }}_${CLEAN_TITLE}.md"
+            
             echo "FINAL_FILENAME=reports/$FNAME_ONLY" >> $GITHUB_ENV
             echo "DISPLAY_NAME=$FNAME_ONLY" >> $GITHUB_ENV
-            # 執行研究並導向至指定路徑
+            
+            # 執行 AI 研究
             python scripts/researcher.py > reports/$FNAME_ONLY
           fi
-          
+
+      - name: Auto-Save Report to Repo
+        if: github.event_name == 'issues'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          git commit -m "🤖 AI 自動存檔：${{ env.DISPLAY_NAME }}" || echo "無變動需提交"
+          git push
+
       - name: Step 2 - Generate PPTX from Report
         if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'presentation'
         run: |
-          # 讀取包含 reports/ 路徑的完整檔案名稱
           python scripts/create_pptx.py ${{ env.FINAL_FILENAME }}
           
       - name: Post Report to Issue
@@ -70,6 +85,6 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'presentation'
         uses: actions/upload-artifact@v4
         with:
-          # 🚀 修正：使用 DISPLAY_NAME (不含斜線) 以避免上傳錯誤
-          name: ${{ env.DISPLAY_NAME }}-PPT
+          # 這裡的 Artifact 名稱也會變得非常有意義
+          name: PPT_${{ env.DISPLAY_NAME }}
           path: Vector_Presentation.pptx
