@@ -1,480 +1,393 @@
-作為一名專精於技術標準、系統開發與產業分析的研究專家，我將針對【如何透過GitHub建立AI助手】產出這份詳細的Markdown技術研究報告。
+作為一位專精於技術標準、系統開發與產業分析的研究專家，我將針對在 GitHub 環境下構建 AI 助手的議題，提出一份詳細的技術研究報告。
 
 ---
 
-# GitHub 原生 AI 助手建置與自動化流程研究
+## GitHub 原生 AI 助手建置與自動化流程研究
 
-## 報告摘要
+### 技術定義
 
-本報告深入探討如何在 GitHub 生態系統中構建一個具備智慧功能的 AI 助手，以實現軟體開發生命週期中的自動化和智慧化任務。我們將解析其核心技術定義、所涉及的 GitHub 原生組件與外部大語言模型（LLM）的整合方式，並提供從零開始的實作步驟。特別地，報告將針對 GitHub 環境下運行 AI 助手時可能遇到的深度技術門檻進行分析，包括 API 速率限制、權限範圍設定安全性、GitHub Actions 執行長度限制以及成本控制等關鍵議題。
+**GitHub 原生 AI 助手** 是指利用 GitHub 平台提供的核心服務與擴展機制，結合外部大語言模型（LLM）的智慧能力，實現自動化、智慧化任務處理的軟體代理。這類助手深度整合於 GitHub 的開發工作流中，能夠響應程式碼變更、Issue 創建、Pull Request 提交、討論區互動等事件，並利用 LLM 執行如程式碼審查、問題分析、文件生成、上下文感知回覆等任務，進而提升開發效率、改善協作體驗。其「原生性」體現為高度依賴 GitHub Actions、GitHub Apps 等 GitHub 生態系統組件來觸發、執行和互動。
 
-## 技術定義 (Technical Definitions)
+### 對應硬體/工具
 
-**GitHub 原生 AI 助手 (GitHub-native AI Assistant)**：
-指一種完全基於 GitHub 平台及其生態系統構建的自動化代理或應用程式。它利用 GitHub 的事件驅動架構（例如，當一個 Pull Request 被打開、一個 Issue 被評論或一個 Discussion 被創建時），結合外部大語言模型（如 OpenAI GPT 或 Google Gemini）的智慧處理能力，自動執行軟體開發工作流中的特定任務。這些任務包括但不限於：
-*   **程式碼審閱協助**：自動分析 PR 內容，提供潛在錯誤、風格建議或優化建議。
-*   **問題分類與回應**：根據 Issue 或 Discussion 內容自動打標籤、分派給團隊成員，或生成初步回應。
-*   **文件摘要與生成**：為 PR 或 Discussion 提供簡潔摘要，或基於上下文生成文件草稿。
-*   **專案管理自動化**：根據特定指令更新專案板、建立子任務等。
+GitHub 原生 AI 助手主要運行於雲端環境，對本地硬體的需求極低，開發階段可選用 Codespaces。
 
-其「原生」性體現在對 GitHub API、GitHub Actions、GitHub Apps 等核心組件的深度依賴和整合，使得助手能夠無縫地讀取、分析和寫入 GitHub 資源，並透過自動化工作流來驅動其行為。
+1.  **GitHub Actions Runners**：這是執行自動化工作流的虛擬環境。GitHub 提供託管型 Runner（Ubuntu、Windows、macOS），開發者無需管理底層硬體。對於特殊需求（如需要特定硬體加速器或更長的執行時間），也可配置自託管型 Runner。
+2.  **GitHub Codespaces**：提供基於雲端的開發環境，可在瀏覽器中直接啟動一個完整的 VS Code 環境，預配置所需的工具鏈和依賴。對於開發 AI 助手邏輯（如 Python 程式碼、模型調用），Codespaces 極大簡化了環境配置的複雜性。
+3.  **外部大語言模型服務**：
+    *   **Google Gemini API / Google Cloud Vertex AI**：提供 Gemini 模型的存取介面，通常透過 REST API 或專屬 SDK (例如 `google-generativeai` Python SDK) 進行呼叫。實際運算在 Google 的雲端基礎設施上執行。
+    *   **OpenAI API (GPT 系列)**：提供 GPT 模型系列的存取介面，同樣透過 REST API 或專屬 SDK (例如 `openai` Python/Node.js SDK) 進行呼叫。實際運算在 OpenAI 的雲端基礎設施上執行。
+4.  **版本控制工具**：Git（本地開發使用）。
+5.  **程式碼編輯器**：VS Code (或 Codespaces 中的 VS Code)、PyCharm 等。
 
-## 對應硬體/工具 (Corresponding Hardware/Tools)
+### 深度技術門檻分析
 
-GitHub AI 助手的建置主要依賴於軟體工具和雲服務，而非特定的「硬體」。以下是核心組件與工具：
+在 GitHub 上運行 AI 助手，開發者常會面臨以下技術門檻：
 
-### GitHub 平台組件 (GitHub Platform Components)
-1.  **GitHub Repositories**: 專案程式碼、配置文件（包括 GitHub Actions workflow 定義）的儲存與版本控制中心。
-2.  **GitHub Actions**: 事件驅動的自動化工作流引擎，負責監聽 GitHub 事件、觸發助手邏輯、執行腳本，並提供運行環境。
-3.  **GitHub Apps (推薦) / Personal Access Tokens (PAT)**: 提供對 GitHub API 的授權機制。GitHub Apps 提供更細粒度的權限控制和更高的 API 速率限制，是構建生產級助手的首選。
-4.  **GitHub API**: 助手與 GitHub 生態系統（Issues, Pull Requests, Comments, Discussions, Repository Contents等）互動的程式介面。
-5.  **GitHub Codespaces (可選)**: 雲端開發環境，提供基於 VS Code 的完整開發體驗，可加速助手的開發和測試過程。
-6.  **GitHub Discussions / Issues / Pull Requests**: 助手可以監聽這些資源的事件，並在其中發表評論、更新狀態。
+1.  **API 速率限制 (API Rate Limiting)**：
+    *   **GitHub API 限制**：GitHub 對其 REST API 有嚴格的速率限制（例如，針對未認證請求每小時 60 次，針對已認證請求每小時 5000 次，對 GitHub Apps 則更高）。如果 AI 助手需要頻繁讀取或寫入 GitHub 資源（如獲取大量 Pull Request 內容、多次發佈評論），很容易觸發限制。
+    *   **LLM API 限制**：LLM 服務提供商（如 Google Gemini、OpenAI）也對 API 呼叫設有限制，包括每分鐘請求數（RPM）、每分鐘 Token 數（TPM）。處理大型輸入（例如整個程式碼庫的 Diff）或處理大量並發事件時，需謹慎管理請求頻率。
+    *   **應對策略**：實作指數退避（Exponential Backoff）重試機制、批量處理請求、使用 GitHub 的 Webhook Payload 以減少不必要的 API 呼叫、優化 LLM 提示以減少 Token 使用量、考慮升級 API 訂閱層級。
 
-### 外部大語言模型 (External Large Language Models - LLMs)
-1.  **OpenAI GPT 系列 (e.g., GPT-3.5, GPT-4)**:
-    *   **SDK/API**: 官方 Python `openai` 函式庫或 REST API。
-2.  **Google Gemini 系列 (e.g., Gemini Pro)**:
-    *   **SDK/API**: 官方 Python `google-generativeai` 函式庫或 REST API。
-3.  **其他 LLM 供應商**: Anthropic Claude, Meta Llama (透過 API 服務提供)。
+2.  **權限範圍 (Scope) 設定與安全性**：
+    *   **`GITHUB_TOKEN` 的範圍**：GitHub Actions 預設提供一個 `GITHUB_TOKEN`，其權限範圍基於觸發工作流的事件和儲存庫設定。如果工作流需要執行寫入操作（如發佈評論、標籤 Issue），必須在工作流 YAML 中明確設定 `permissions`，遵循最小權限原則。過度授權可能帶來安全風險。
+    *   **GitHub Apps 的精細權限**：對於更複雜、需要長期穩定權限或跨儲存庫操作的 AI 助手，建議使用 GitHub Apps。GitHub Apps 允許管理員精確控制應用程式對特定儲存庫資源的讀寫權限，並提供更持久的認證方式，但其設定和開發複雜度遠高於 GitHub Actions。
+    *   **外部 API Key 管理**：大語言模型的 API Key 是敏感資訊，必須安全存儲。GitHub Secrets 提供安全的環境變數管理機制，但確保這些 Secrets 不會意外洩露到日誌或不安全的地方至關重要。
 
-### 程式語言與開發工具 (Programming Languages & Development Tools)
-1.  **程式語言**:
-    *   **Python**: 因其在 AI/ML 領域的廣泛應用、豐富的函式庫生態（如 `openai`、`google-generativeai`、`PyGithub`）以及易用性，是開發 AI 助手核心邏輯的熱門選擇。
-    *   **Node.js**: 若開發者偏好 JavaScript 生態，可使用 `Octokit.js` 函式庫與 GitHub API 互動。
-2.  **YAML**: 用於定義 GitHub Actions workflow 檔案。
-3.  **Git**: 版本控制工具。
-4.  **IDE/編輯器**: Visual Studio Code (尤其與 Codespaces 結合使用)。
+3.  **GitHub Actions 執行長度與資源限制**：
+    *   **執行時間限制**：GitHub Actions 對每個 Job 的執行時間有上限（例如，託管型 Runner 的 Job 最長 6 小時）。對於需要長時間運算的 AI 任務（如處理超大程式碼庫的全面分析），可能需要優化任務邏輯或將其拆分為多個獨立 Job。
+    *   **資源限制**：託管型 Runner 提供標準的 CPU、記憶體和儲存空間。對於需要大量計算資源的任務，可能會遇到性能瓶頸。此時，可以考慮使用自託管型 Runner，但這會增加維護成本。
+    *   **費用考量**：GitHub Actions 的免費額度是有限的（公共儲存庫無限，私有儲存庫每月有一定分鐘數限制）。超出額度將產生費用。LLM API 呼叫同樣會產生費用，尤其是在處理大量資料或使用高階模型時。
 
-## 實作階段名稱：專案初始化與版本控制階段
+4.  **LLM 提示工程 (Prompt Engineering) 複雜性**：
+    *   **穩定性和品質**：如何設計有效的提示詞（Prompt）來引導 LLM 產生符合預期、高質量、穩定且無偏見的輸出，是一項複雜的任務。針對不同的 GitHub 事件和任務，需要精細調整提示。
+    *   **上下文管理**：LLM 的上下文視窗（Context Window）有限。對於需要參考大量程式碼、Issue 歷史或討論內容的任務，如何高效地選擇、總結和壓縮相關上下文，使其在 LLM 的視窗內，同時不丟失關鍵資訊，是挑戰之一。
+    *   **錯誤處理與結果驗證**：LLM 可能會產生幻覺（Hallucinations）或不準確的資訊。AI 助手需要有機制來驗證 LLM 的輸出，並處理潛在的錯誤或不明確的回覆。
 
-本階段主要建立 GitHub 專案的基礎結構，確保版本控制的正確性，並為後續開發奠定環境。
+---
 
-### 功能與工具對應表
+## 實作階段一：專案初始化與環境配置階段
 
-| 功能模組             | GitHub 功能/工具 | 所需技術           | 具體作用                                   |
-| :------------------- | :--------------- | :----------------- | :----------------------------------------- |
-| 專案初始化與託管     | GitHub Repository | Git, `.gitignore`  | 儲存 AI 助手所有程式碼、配置與工作流定義 |
-| 開發環境建置 (可選) | GitHub Codespaces | Docker, `.devcontainer.json` | 提供標準化、快速啟動的雲端開發環境，減少本地環境配置差異 |
-
-### 實作步驟
-
-1.  **建立 GitHub Repository**:
-    *   登錄 GitHub，點擊右上角 `+` 號，選擇 `New repository`。
-    *   為專案命名 (e.g., `ai-github-assistant`)，選擇公開或私人，並初始化 README。
-    *   複製 Repository 的 Git URL。
-2.  **本地環境設定與程式碼克隆**:
-    *   在本地開發機器上，開啟終端機或 Git Bash。
-    *   使用 `git clone [Repository URL]` 將專案克隆到本地。
-    *   進入專案目錄 `cd ai-github-assistant`。
-3.  **建立基礎檔案結構**:
-    *   創建核心邏輯存放目錄：`mkdir src`。
-    *   創建 GitHub Actions 工作流定義目錄：`mkdir -p .github/workflows`。
-    *   創建依賴管理檔案：
-        *   若使用 Python: 建立 `requirements.txt`。
-        *   若使用 Node.js: 執行 `npm init -y` 產生 `package.json`。
-    *   新增 `.gitignore` 檔案，忽略敏感資訊、快取檔案和本地開發環境產物 (e.g., `.env`, `__pycache__`, `node_modules`)。
-4.  **GitHub Codespaces 配置 (可選)**:
-    *   在專案根目錄建立 `.devcontainer` 目錄。
-    *   在 `.devcontainer` 內建立 `devcontainer.json` 檔案，定義 Codespaces 的運行時環境（例如，指定 Python 版本、安裝 VS Code 擴展、執行初始化腳本）。這確保所有開發者都擁有一致的開發環境。
-
-## 實作階段名稱：環境配置與機密管理階段
-
-本階段專注於設定必要的環境變數和安全儲存敏感資訊（如 API Keys、App 私鑰），並配置助手在 GitHub 上操作所需的權限。
+本階段主要建立 GitHub 儲存庫，並安全地配置外部 AI 服務所需的 API 密鑰。
 
 ### 功能與工具對應表
 
-| 功能模組             | GitHub 功能/工具 | 所需技術         | 具體作用                                   |
-| :------------------- | :--------------- | :--------------- | :----------------------------------------- |
-| API 憑證與敏感資訊 | GitHub Secrets   | 環境變數, YAML   | 安全地儲存 LLM API Key、GitHub App 私鑰等憑證，確保它們不會被公開暴露於程式碼中 |
-| 授權與權限管理     | GitHub Apps      | OAuth, JWT       | 以受控方式對 GitHub API 進行精細化、低權限存取，提升安全性並獲得更高 API 限制 |
-| 工作流權限配置     | GitHub Actions   | YAML, `permissions` | 定義每個工作流執行時的最小必要權限，限制 Actions Token 的能力 |
+| GitHub 功能模組         | 所需技術/工具                                  | 作用                                                                                                     |
+| :---------------------- | :--------------------------------------------- | :------------------------------------------------------------------------------------------------------- |
+| **GitHub Repository**   | Git, Markdown                                  | 儲存助手的程式碼、設定檔，並作為版本控制中心。`README.md` 用於專案說明。                                 |
+| **GitHub Secrets**      | N/A (GitHub Platform Feature)                  | 安全地儲存敏感資訊，如 LLM API Key，防止其被直接暴露在程式碼或日誌中。                                    |
+| **外部 LLM 服務 (Gemini)** | Google AI Studio (或 Google Cloud Console) | 獲取 LLM 服務的 API Key，用於後續呼叫其模型。                                                            |
+| **本地開發環境**        | 瀏覽器 (Codespaces) 或 本地 IDE (VS Code)      | 用於撰寫初始腳本和工作流定義，測試環境配置。                                                             |
 
-### 實作步驟
+### 執行步驟 (以 Gemini 為例)
 
-1.  **取得 LLM API 金鑰**:
-    *   **OpenAI**: 訪問 OpenAI Platform，註冊帳號，並在 API keys 頁面生成新的 API Key。
-    *   **Google Gemini**: 訪問 Google AI Studio 或 Google Cloud Platform，啟用 Gemini API，並生成 API Key。
-    *   妥善保管這些金鑰，它們是敏感資訊。
-2.  **設定 GitHub Secrets**:
-    *   導航至你的 GitHub Repository。
-    *   點擊 `Settings` -> `Secrets and variables` -> `Actions`。
+1.  **創建 GitHub 儲存庫 (Repository)**
+    *   登錄 GitHub。
+    *   點擊右上角 `+` -> `New repository`。
+    *   輸入儲存庫名稱 (例如：`github-ai-assistant-gemini`)，可選擇 `Private` 或 `Public`。
+    *   勾選 `Add a README file`。
+    *   點擊 `Create repository`。
+
+2.  **獲取 Google Gemini API 金鑰**
+    *   前往 [Google AI Studio](https://aistudio.google.com/)。
+    *   登錄您的 Google 帳戶。
+    *   在左側導航欄點擊 `Get API key`。
+    *   點擊 `Create API key in new project` 或 `Create API key in existing project`。
+    *   複製生成的 API 金鑰。**請務必妥善保管，切勿直接提交到版本控制中。**
+
+3.  **在 GitHub Secrets 中配置 API 金鑰**
+    *   返回您的 GitHub 儲存庫頁面。
+    *   點擊 `Settings` 選項卡。
+    *   在左側導航欄中，找到 `Secrets and variables` -> `Actions`。
     *   點擊 `New repository secret`。
-    *   新增以下 Secrets (依你使用的 LLM 和授權方式選擇)：
-        *   `OPENAI_API_KEY`: 存放你的 OpenAI API Key。
-        *   `GEMINI_API_KEY`: 存放你的 Google Gemini API Key。
-        *   `GITHUB_APP_ID`: 存放 GitHub App 的 ID (若使用 GitHub App)。
-        *   `GITHUB_APP_PRIVATE_KEY`: 存放 GitHub App 的私鑰內容 (若使用 GitHub App)。
-        *   `GITHUB_TOKEN_PAT` (不建議用於生產): 存放 Personal Access Token (PAT)，如果臨時測試可以考慮。
-3.  **建立與配置 GitHub App (推薦，優於 PAT)**:
-    *   導航至 GitHub 帳戶 `Settings` -> `Developer settings` -> `GitHub Apps`。
-    *   點擊 `New GitHub App`。
-    *   填寫 App 名稱 (e.g., `My-AI-Assistant`)、首頁 URL (可填 Repository URL)。
-    *   **配置 Webhook**:
-        *   `Webhook URL`: 可以填寫一個暫時的 URL 或 GitHub Actions 的觸發 endpoint (通常由 Actions 自己處理)。若不需要接收 Webhook，可留空。
-        *   `Webhook secret`: 生成一個隨機字串，並也存為 GitHub Secret (e.g., `WEBHOOK_SECRET`)。
-    *   **配置 App 權限 (Permissions)**: 這是關鍵步驟，應遵循**最小權限原則**。根據助手所需功能選擇：
-        *   `Contents`: `Read-only` (讀取程式碼、檔案) 或 `Read and write` (修改檔案，通常用於自動化更新)。
-        *   `Issues`: `Read and write` (創建/評論/關閉 Issue)。
-        *   `Pull requests`: `Read and write` (評論 PR、更新 PR 狀態)。
-        *   `Discussions`: `Read and write` (評論 Discussion)。
-        *   `Repository metadata`: `Read-only`。
-        *   其他權限請根據實際需求仔細評估。
-    *   **訂閱事件 (Subscribe to events)**: 選擇助手需要響應的 GitHub 事件，例如 `Pull request`、`Issue comment`、`Discussion comment` 等。
-    *   點擊 `Create GitHub App`。
-    *   創建後，你將獲得 `App ID`。在 App 頁面底部，生成一個新的私鑰 (`Generate a private key`)，下載 `.pem` 檔案。將 `App ID` 和 `.pem` 檔案內容（複製完整內容，包括 `-----BEGIN RSA PRIVATE KEY-----` 和 `-----END RSA PRIVATE KEY-----`）分別存入上一步驟配置的 GitHub Secrets。
-    *   **安裝 App**: 在你的 App 頁面，點擊 `Install App` -> `Install`，並選擇要安裝此 App 的 Repository。
-4.  **或者生成 Personal Access Token (PAT) (僅用於簡化測試或特定低風險場景)**:
-    *   導航至 GitHub 帳戶 `Settings` -> `Developer settings` -> `Personal access tokens` -> `Tokens (classic)`。
-    *   點擊 `Generate new token`。
-    *   勾選所需權限 (Scopes)，同樣遵循最小權限原則。例如，`repo` (提供對 Repo 內容的廣泛權限)、`workflow` (允許觸發 workflow)、`read:discussion` (讀取討論) 等。
-    *   複製生成的 PAT，並存入 GitHub Secret `GITHUB_TOKEN_PAT`。**注意：PAT 權限廣泛且不易管理，不建議長期用於生產環境。**
+    *   在 `Name` 欄位輸入：`GEMINI_API_KEY` (這個名稱將在 GitHub Actions 中作為環境變數使用)。
+    *   在 `Secret` 欄位貼上您在步驟 2 中獲取的 Gemini API 金鑰。
+    *   點擊 `Add secret`。
 
-## 實作階段名稱：核心邏輯開發階段
+---
 
-本階段是 AI 助手的智慧核心，負責處理 GitHub 事件、與 LLM 互動、以及根據業務邏輯生成回應或執行操作。
+## 實作階段二：核心邏輯開發階段
+
+此階段將使用 Python 撰寫 AI 助手的核心邏輯，實現與 Gemini LLM 的互動。
 
 ### 功能與工具對應表
 
-| 功能模組             | GitHub 功能/工具 | 所需技術                 | 具體作用                                   |
-| :------------------- | :--------------- | :----------------------- | :----------------------------------------- |
-| GitHub API 互動     | `github/octokit` (JS), `PyGithub` (Python), `github-app-token` | Python 或 Node.js, `JWT` | 解析 GitHub 事件酬載，使用 GitHub API 讀取資源、發表評論、修改狀態 |
-| LLM 整合與呼叫     | OpenAI SDK, Gemini SDK, REST API | Python 或 Node.js        | 向大語言模型發送結構化請求（prompt），接收並解析其生成內容 |
-| 核心業務邏輯         | 自訂程式碼         | Python 或 Node.js        | 整合 GitHub 數據與 LLM 輸出，實作助手的具體功能（如 PR 審閱、Issue 分類） |
-| 環境變數存取         | `os.environ` (Python), `process.env` (Node.js) | Python 或 Node.js        | 從 GitHub Actions 運行環境中安全地讀取 Secrets 傳入的環境變數 |
+| GitHub 功能模組 | 所需技術/工具                                  | 作用                                                                                             |
+| :-------------- | :--------------------------------------------- | :----------------------------------------------------------------------------------------------- |
+| **程式碼儲存**  | Python, `google-generativeai` SDK, `PyGithub` | 編寫 AI 助手的業務邏輯，包括從 GitHub API 獲取上下文、呼叫 Gemini 模型、處理模型回覆。             |
+| **GitHub Codespaces** | Python 環境, VS Code                              | 提供一致且易於設定的雲端開發環境，無需在本地配置開發工具和依賴。 (可選，也可在本地開發)              |
+| **外部 LLM 服務** | Gemini API (透過 SDK)                            | 提供 AI 的智慧核心，接收提示並生成回應。                                                          |
+| **GitHub API**  | `PyGithub` (Python Library) 或 Octokit         | 允許助手與 GitHub 平台進行程式化互動，例如讀取 Pull Request 詳情、發佈評論、更新 Issue 等。 |
 
-### 實作步驟
+### 執行步驟 (以 Gemini 為例，以 PR 程式碼審查助手為例)
 
-1.  **選擇程式語言與安裝依賴**:
-    *   進入 `src` 目錄。
-    *   **Python**:
-        *   在 `requirements.txt` 中添加：
-            ```
-            PyGithub==1.59.0 # 或最新版本
-            openai==1.x.x   # 或 google-generativeai
-            python-dotenv   # 本地開發用，不影響 Actions
-            ```
-        *   執行 `pip install -r requirements.txt`。
-    *   **Node.js**:
-        *   在專案根目錄執行 `npm init -y`。
-        *   執行 `npm install @octokit/rest openai` (或 `google-generativeai`, `probot`)。
-2.  **撰寫 GitHub 事件處理器與 API 互動程式碼**:
-    *   在 `src` 目錄下創建一個 Python 腳本 (e.g., `main.py`) 或 Node.js 腳本 (e.g., `index.js`)。
-    *   **GitHub API 客戶端初始化**:
-        *   **使用 GitHub App (推薦)**: 這通常涉及一個步驟，用 App ID 和私鑰生成一個 JWT，然後用 JWT 換取一個 Installation Token，再用這個 Token 初始化 GitHub API 客戶端。有現成的函式庫可以簡化此過程 (e.g., `github-app-token` for Python/Node.js)。
-        *   **使用 PAT**: `g = Github(os.getenv("GITHUB_TOKEN_PAT"))` (Python) 或 `const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN_PAT });` (Node.js)。
-    *   **獲取事件酬載 (Payload)**: GitHub Actions 會將觸發事件的 JSON 酬載儲存在 `GITHUB_EVENT_PATH` 環境變數指定的文件中，或者直接透過 `github.context.payload` 傳遞。程式碼需要讀取並解析這個酬載。
-        ```python
-        import json
-        import os
-        from github import Github, Auth
-        # 獲取 GitHub Action 提供的上下文，其中包含事件酬載
-        github_event_path = os.getenv('GITHUB_EVENT_PATH')
-        if github_event_path:
-            with open(github_event_path, 'r') as f:
-                event_payload = json.load(f)
-        else:
-            # For local testing or if GITHUB_EVENT_PATH is not set
-            event_payload = {}
-        # 根據事件類型提取相關資訊 (例如 PR 號、Issue 號、評論內容等)
-        if 'pull_request' in event_payload:
-            pr_number = event_payload['pull_request']['number']
-            repo_name = event_payload['repository']['full_name']
-            # ... 獲取 PR 內容、diff 等
-        # 初始化 GitHub 客戶端 (使用 GitHub App Token)
-        # 這裡需要一個更複雜的流程來生成 installation token
-        # 通常會使用一個第三方函式庫或自訂邏輯來處理 JWT -> Installation Token 的轉換
-        # 例如：github-app-token 函式庫
-        # from github_app_token import GitHubAppToken
-        # auth_manager = GitHubAppToken(os.getenv("GITHUB_APP_ID"), os.getenv("GITHUB_APP_PRIVATE_KEY"))
-        # token = auth_manager.get_installation_token(event_payload['installation']['id'])
-        # g = Github(auth=Auth.Token(token))
-        # 簡化範例：使用 GITHUB_TOKEN (自動由 Actions 提供，但權限有限)
-        g = Github(os.getenv("GITHUB_TOKEN"))
-        repo = g.get_repo(repo_name)
-        # ... 進行 GitHub API 操作，如發表評論 `repo.get_pull(pr_number).create_issue_comment(...)`
-        ```
-3.  **整合 LLM 邏輯**:
-    *   **LLM 客戶端初始化**:
-        ```python
-        import openai
-        openai.api_key = os.getenv("OPENAI_API_KEY")
-        # 或 Google Gemini
-        # import google.generativeai as genai
-        # genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        ```
-    *   **Prompt Engineering**: 設計清晰、具體的 prompt，引導 LLM 生成所需的內容。這包括：
-        *   **System Message**: 定義助手的角色、語氣和行為 (e.g., "你是一個專門審查程式碼的 AI 助手，請用簡潔、專業的語氣提出建議。")。
-        *   **User Message**: 包含 GitHub 事件的上下文資訊 (e.g., PR 的程式碼變動、Issue 描述、Discussion 內容)。
-        *   **Few-shot examples (可選)**: 提供幾個輸入-輸出範例，幫助 LLM 更好地理解任務。
-    *   **呼叫 LLM API**:
-        ```python
-        messages = [
-            {"role": "system", "content": "You are a helpful AI assistant."},
-            {"role": "user", "content": f"Please summarize this pull request: {pr_diff_content}"}
-        ]
-        response = openai.chat.completions.create(
-            model="gpt-4",
-            messages=messages,
-            temperature=0.7 # 創造性程度，0.0-1.0
-        )
-        llm_output = response.choices[0].message.content
-        ```
-4.  **定義助手核心功能**:
-    *   **PR 審閱**:
-        *   獲取 PR 的 `diff` 內容。
-        *   將 `diff` 和審閱指令傳給 LLM。
-        *   將 LLM 生成的建議以評論形式發佈到 PR 上。
-    *   **Issue/Discussion 回覆**:
-        *   獲取 Issue/Discussion 的內容或新評論。
-        *   將內容傳給 LLM 生成回覆。
-        *   將 LLM 回覆發佈為新的評論。
-    *   **Issue/PR 分類**:
-        *   獲取 Issue 標題和描述。
-        *   讓 LLM 建議標籤或指派人。
-        *   使用 GitHub API 更新 Issue 標籤或指派。
+我們將創建一個 Python 腳本，用於接收 Pull Request 的程式碼差異 (diff)，發送給 Gemini 進行審查，並生成審查意見。
 
-## 實作階段名稱：自動化流程設計階段
+1.  **選擇開發環境**
+    *   **選項 A (推薦 - Codespaces)**: 在 GitHub 儲存庫頁面，點擊 `Code` -> `Codespaces` -> `Create codespace on main`。等待 Codespace 啟動。
+    *   **選項 B (本地環境)**: 克隆儲存庫到本地：`git clone https://github.com/YOUR_USERNAME/github-ai-assistant-gemini.git`。使用 VS Code 或其他 IDE 打開專案。
 
-此階段定義 GitHub Actions workflow，設定觸發機制、執行環境和一系列的執行步驟，將核心邏輯串接到 GitHub 事件流中。
+2.  **創建 Python 腳本**
+    *   在儲存庫根目錄下創建一個新資料夾 `scripts`。
+    *   在 `scripts` 資料夾中創建 `pr_reviewer.py` 檔案。
+
+3.  **安裝必要的 Python 套件 (在 Codespaces 或本地環境中)**
+    *   開啟終端機。
+    *   `pip install google-generativeai PyGithub`
+
+4.  **編寫 `pr_reviewer.py` 內容**
+
+    ```python
+    import os
+    import sys
+    import logging
+    import google.generativeai as genai
+    from github import Github
+
+    # 配置日誌
+    logging.basicConfig(level=logging.INFO, stream=sys.stdout, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    def get_pr_diff(repo, pr_number):
+        """從 GitHub API 獲取 Pull Request 的程式碼差異"""
+        try:
+            pull_request = repo.get_pull(pr_number)
+            # GitHub API 限制：直接獲取 diff 可能很長。這裡只獲取部分資訊。
+            # 實際應用中，通常會從觸發 Actions 的 payload 中獲取 diff URL，然後使用 requests 庫下載。
+            # 為了簡化範例，我們假設已經有 diff 內容或者僅傳遞 PR 描述。
+            logging.info(f"Fetching PR #{pr_number} from {repo.full_name}")
+            return pull_request.get_files() # 返回文件列表，更詳細的 diff 需要另行處理
+        except Exception as e:
+            logging.error(f"Error getting PR diff for #{pr_number}: {e}")
+            sys.exit(1) # 如果無法獲取PR，則退出
+
+    def generate_review_comment(diff_content, gemini_api_key):
+        """使用 Gemini 模型生成程式碼審查意見"""
+        if not diff_content:
+            return "未能獲取有效的程式碼變更內容，無法進行審查。"
+
+        genai.configure(api_key=gemini_api_key)
+        model = genai.GenerativeModel('gemini-pro')
+
+        prompt = f"""
+        你是一個資深的程式碼審查助手，請仔細審查以下 Pull Request 的程式碼變更。
+        請專注於：
+        1. 潛在的 bug、效能問題、安全漏洞。
+        2. 程式碼風格、可讀性、維護性。
+        3. 測試覆蓋率的建議 (如果能從上下文判斷)。
+        4. 設計模式和架構原則的遵循。
+        5. 提出具體、可執行的改進建議，並解釋原因。
+        6. 對於較小的變更，可以給出簡潔的認可或輕微建議。
+        7. 以 Markdown 格式輸出，語氣友好且專業。
+
+        以下是 Pull Request 包含的文件列表 (請注意，這不是完整的 diff，可能需要基於文件名進行猜測和高層次建議):
+        {diff_content}
+
+        請開始你的審查：
+        """
+        logging.info("Sending prompt to Gemini...")
+        try:
+            response = model.generate_content(prompt)
+            return response.text
+        except Exception as e:
+            logging.error(f"Error calling Gemini API: {e}")
+            return f"對不起，我在調用 AI 服務時遇到問題，錯誤訊息：{e}"
+
+    def post_pr_comment(repo, pr_number, comment_body):
+        """將審查意見發佈到 Pull Request"""
+        try:
+            pull_request = repo.get_pull(pr_number)
+            pull_request.create_issue_comment(comment_body)
+            logging.info(f"Successfully posted comment to PR #{pr_number}")
+        except Exception as e:
+            logging.error(f"Error posting comment to PR #{pr_number}: {e}")
+
+    if __name__ == "__main__":
+        # 從環境變數獲取 GitHub Token 和 Gemini API Key
+        github_token = os.getenv('GITHUB_TOKEN')
+        gemini_api_key = os.getenv('GEMINI_API_KEY')
+        github_repository = os.getenv('GITHUB_REPOSITORY') # 格式: owner/repo
+        github_pr_number = os.getenv('PR_NUMBER') # 從 Actions 傳入
+
+        if not github_token or not gemini_api_key or not github_repository or not github_pr_number:
+            logging.error("Missing required environment variables (GITHUB_TOKEN, GEMINI_API_KEY, GITHUB_REPOSITORY, PR_NUMBER).")
+            sys.exit(1)
+
+        try:
+            pr_number = int(github_pr_number)
+        except ValueError:
+            logging.error(f"Invalid PR_NUMBER: {github_pr_number}")
+            sys.exit(1)
+
+        # 初始化 GitHub 客戶端
+        g = Github(github_token)
+        owner, repo_name = github_repository.split('/')
+        repo = g.get_user(owner).get_repo(repo_name)
+
+        # 獲取 PR 文件的列表 (作為 diff_content 的簡化替代)
+        files = get_pr_diff(repo, pr_number)
+        file_list_summary = "\n".join([f"- {f.filename} (status: {f.status})" for f in files])
+        if not file_list_summary:
+            file_list_summary = "沒有檢測到文件變更。"
+
+        review_comment = generate_review_comment(file_list_summary, gemini_api_key)
+        post_pr_comment(repo, pr_number, review_comment)
+    ```
+
+    **注意：**
+    *   範例中的 `get_pr_diff` 函數僅獲取了文件列表作為 diff 的簡化替代。在實際生產環境中，您需要獲取真正的程式碼 `diff` 內容。可以透過 `requests` 庫向 `pull_request.diff_url` 發送 GET 請求，然後將獲取的完整 diff 內容傳遞給 Gemini。這需要處理大文件和 LLM Token 限制。
+    *   `PR_NUMBER` 需要在 GitHub Actions 中作為環境變數傳遞進來。
+
+---
+
+## 實作階段三：自動化工作流建置階段
+
+本階段將使用 GitHub Actions 定義一個自動化工作流，在 Pull Request 相關事件發生時觸發 AI 助手腳本。
 
 ### 功能與工具對應表
 
-| 功能模組             | GitHub 功能/工具 | 所需技術       | 具體作用                                   |
-| :------------------- | :--------------- | :------------- | :----------------------------------------- |
-| 事件觸發機制         | GitHub Actions   | YAML, `on`     | 監聽 GitHub 事件（如 `pull_request`、`issue_comment`），在事件發生時啟動工作流 |
-| 工作流執行環境     | GitHub Actions Runner | Linux, Docker  | 提供一個隔離的虛擬環境（Ubuntu, Windows, macOS），用於執行助手的程式碼和相關操作 |
-| 任務編排與執行     | GitHub Actions   | YAML, `jobs`, `steps` | 定義工作流中的一系列順序步驟，包括程式碼檢查、環境設定、依賴安裝和核心邏輯執行 |
-| 權限控制             | GitHub Actions   | YAML, `permissions` | 精確控制工作流中使用的 GITHUB_TOKEN 的權限範圍，確保安全最小化 |
+| GitHub 功能模組     | 所需技術/工具                                  | 作用                                                                                                     |
+| :------------------ | :--------------------------------------------- | :------------------------------------------------------------------------------------------------------- |
+| **GitHub Actions**  | YAML (Workflow Syntax), GitHub Actions Runner  | 定義自動化流程的觸發條件、執行步驟、依賴關係。託管執行環境，運行腳本。                                    |
+| **Workflow Triggers** | `on: pull_request: types: [opened, synchronize]` | 指定工作流在 Pull Request 被開啟或更新時自動執行。                                                        |
+| **`actions/checkout@v4`** | N/A (GitHub Action)                            | 將儲存庫的程式碼檢出到 Runner 環境中，以便腳本可以存取。                                                 |
+| **`actions/setup-python@v5`** | N/A (GitHub Action)                            | 在 Runner 上設定 Python 環境，確保腳本能正常運行。                                                       |
+| **`GITHUB_TOKEN`**  | N/A (GitHub Actions Context)                   | 由 GitHub Actions 自動生成，用於工作流中對儲存庫執行認證操作。其權限可在 `permissions` 中配置。             |
+| **環境變數 (Env)**  | YAML                                           | 將 GitHub Secrets (如 `GEMINI_API_KEY`) 和 GitHub Context (如 PR 號碼) 安全地傳遞給 Python 腳本。 |
 
-### 實作步驟
+### 執行步驟 (以 Gemini PR 審查助手為例)
 
-1.  **建立 Workflow 檔案**:
-    *   在 `.github/workflows/` 目錄下創建一個 YAML 檔案 (e.g., `ai-assistant.yml`)。
-2.  **定義觸發事件 (`on`)**:
-    *   根據助手功能選擇合適的觸發事件。
-    *   範例：在 PR 打開、更新或評論時觸發，或在 Issue/Discussion 評論時觸發。
+1.  **創建 GitHub Actions 工作流檔案**
+    *   在儲存庫根目錄下創建 `.github/workflows/` 資料夾。
+    *   在 `.github/workflows/` 資料夾中創建 `pr_review_workflow.yml` 檔案。
+
+2.  **編寫 `pr_review_workflow.yml` 內容**
+
     ```yaml
+    name: AI Pull Request Reviewer
+
+    # 定義觸發條件：當 Pull Request 被打開或有新的提交時觸發
     on:
       pull_request:
-        types: [opened, synchronize, reopened] # PR 打開、更新、重新打開時觸發
-      issue_comment:
-        types: [created] # Issue 評論創建時觸發
-      discussion_comment:
-        types: [created] # Discussion 評論創建時觸發
-      workflow_dispatch: # 允許手動觸發，方便測試
-        inputs:
-          event_type:
-            description: 'Manual event type for testing'
-            required: false
-            default: 'test'
-    ```
-3.  **定義工作 (`jobs`)**:
-    *   一個工作流可以包含一個或多個工作 (jobs)。每個 job 在一個獨立的 Runner 上運行。
-    ```yaml
+        types: [opened, synchronize] # 'opened' PR 首次創建, 'synchronize' PR 有新的提交
+
+    # 設定工作流的默認權限
+    # 這裡賦予 'pull-requests' 寫入權限，以便助手能夠發佈評論
+    permissions:
+      contents: read # 讀取儲存庫內容
+      pull-requests: write # 寫入 Pull Request 評論
+
     jobs:
-      run_ai_assistant:
-        runs-on: ubuntu-latest # 指定 Runner 環境
-        # 配置工作流的權限。這是非常重要的安全措施。
-        # 如果使用 GitHub App，這裡的權限應與 App 的權限協同。
-        permissions:
-          contents: read
-          pull-requests: write # 允許對 PR 寫入評論
-          issues: write        # 允許對 Issue 寫入評論
-          discussions: write   # 允許對 Discussion 寫入評論
+      review_pr:
+        runs-on: ubuntu-latest # 在最新的 Ubuntu 託管型 Runner 上運行
+
         steps:
-          # 步驟 1: 檢查程式碼
-          - name: Checkout repository
-            uses: actions/checkout@v4
-          # 步驟 2: 設定 Python 環境
-          - name: Set up Python
-            uses: actions/setup-python@v5
-            with:
-              python-version: '3.9' # 指定 Python 版本
-          # 步驟 3: 安裝依賴
-          - name: Install dependencies
-            run: |
-              python -m pip install --upgrade pip
-              pip install -r requirements.txt
-          # 步驟 4: 運行 AI 助手核心邏輯
-          - name: Run AI Assistant
-            env: # 將 Secrets 以環境變數形式傳遞給腳本
-              OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-              GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-              # 若使用 GitHub App，傳遞 App ID 和私鑰
-              GITHUB_APP_ID: ${{ secrets.GITHUB_APP_ID }}
-              GITHUB_APP_PRIVATE_KEY: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
-              # GitHub Actions 會自動提供一個 GITHUB_TOKEN，但其權限受 workflow permissions 控制
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-            run: python src/main.py # 執行你的 Python 助手腳本
+        - name: Checkout Repository
+          uses: actions/checkout@v4 # 檢出儲存庫程式碼
+
+        - name: Set up Python
+          uses: actions/setup-python@v5
+          with:
+            python-version: '3.9' # 指定 Python 版本
+
+        - name: Install Dependencies
+          run: |
+            pip install google-generativeai PyGithub # 安裝 Python 腳本所需的套件
+
+        - name: Run AI Pull Request Reviewer
+          run: python scripts/pr_reviewer.py # 執行我們在實作階段二編寫的 Python 腳本
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 自動提供的 GitHub Actions Token
+            GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # 從 GitHub Secrets 獲取 Gemini API Key
+            GITHUB_REPOSITORY: ${{ github.repository }} # 獲取當前儲存庫名稱 (owner/repo)
+            PR_NUMBER: ${{ github.event.pull_request.number }} # 獲取觸發事件的 Pull Request 號碼
+
+        # 可選：如果需要更簡單地發佈評論，可以使用 github-script Action
+        # - name: Run AI Pull Request Reviewer and Post Comment (Alternative using github-script)
+        #   uses: actions/github-script@v7
+        #   with:
+        #     script: |
+        #       const fs = require('fs');
+        #       const path = require('path');
+        #       const { execSync } = require('child_process');
+        #       const GEMINI_API_KEY = process.env.GEMINI_API_KEY; // 從 env 獲取
+        #       const PR_NUMBER = context.issue.number;
+        #       const owner = context.repo.owner;
+        #       const repo = context.repo.repo;
+
+        #       // 注意：這裡需要您自行實現獲取 PR Diff 的邏輯
+        #       // 例如，透過 octokit 獲取 diff URL，再用 fetch 下載
+        #       // 這裡簡化為一個占位符
+        #       const pr_diff = execSync(`git diff HEAD^!`).toString(); // 簡易獲取當前 PR 的 diff (在 PR merge base 上)
+        #       console.log('PR Diff fetched:', pr_diff.substring(0, 500) + '...'); // 顯示部分 diff
+
+        #       // 呼叫 Gemini API 的邏輯（這部分可能需要非同步處理或獨立函數）
+        #       // 由於 github-script 內直接呼叫外部 API 且處理長文本較為複雜，
+        #       // 建議將 AI 邏輯保持在 Python 腳本中，然後將結果傳回。
+        #       // 此處僅為示意，表示可以在 JS 腳本中執行 API 呼叫
+        #       const review_comment = "AI 審查功能暫未在此處啟用，請參閱 Python 腳本。"; // 替換為實際 AI 回覆
+
+        #       github.rest.issues.createComment({
+        #         owner: owner,
+        #         repo: repo,
+        #         issue_number: PR_NUMBER,
+        #         body: review_comment
+        #       });
+        #   env:
+        #     GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     ```
-    *   **解釋 `env` 中的 `GITHUB_TOKEN`**: GitHub Actions 會自動為每個工作流運行生成一個臨時代理的 `GITHUB_TOKEN`，其權限受 `permissions` 塊控制。對於簡單的評論、讀取操作，這個 token 可能足夠。但對於更高級或需要特定權限的場景，使用 GitHub App 更為推薦。
-4.  **Commit 與 Push**: 將 `.github/workflows/ai-assistant.yml` 檔案提交並推送到 GitHub Repository。這將使 GitHub Actions 監聽你定義的事件。
-
-## 實作階段名稱：測試、部署與監控階段
-
-此階段確保 AI 助手能正常運作，並能有效追蹤其行為和潛在問題。
-
-### 功能與工具對應表
-
-| 功能模組             | GitHub 功能/工具 | 所需技術           | 具體作用                                   |
-| :------------------- | :--------------- | :----------------- | :----------------------------------------- |
-| 測試與調試         | GitHub Actions Logs, GitHub Codespaces | GitHub API Logs, LLM Logs, IDE Debugger | 追蹤工作流執行情況，查看日誌輸出以定位程式碼錯誤、API 呼叫問題或 LLM 響應異常 |
-| 持續部署 (CD)      | GitHub Actions   | Git Push           | 程式碼推送至特定分支後，自動觸發工作流更新助手邏輯，實現快速迭代 |
-| 運行狀態監控         | GitHub Actions Logs | 日誌分析, GitHub Actions UI | 監控工作流的成功率、執行時間、資源消耗和潛在失敗，確保助手的穩定運行 |
-| 錯誤與警報 (可選)  | 第三方服務 (e.g., Sentry), GitHub Issues | 日誌聚合, 通知系統   | 捕獲運行時錯誤，並發送警報給開發者，以便及時處理 |
-
-### 實作步驟
-
-1.  **觸發測試事件**:
-    *   根據你設定的 `on` 觸發器，在你的 Repository 中創建一個測試用的 Pull Request、Issue 或 Discussion 評論。
-    *   或者，如果你設定了 `workflow_dispatch`，可以在 Actions 頁面手動觸發工作流。
-2.  **監控 GitHub Actions 執行**:
-    *   導航至你的 Repository 的 `Actions` tab。
-    *   你將看到一個新的工作流運行被觸發。點擊它以查看實時日誌。
-    *   仔細檢查每個 `step` 的輸出，特別是你的 AI 助手腳本的輸出。查找任何錯誤訊息、警告或非預期的行為。
-3.  **調試與迭代**:
-    *   **程式碼錯誤**: 如果工作流失敗，根據日誌中的堆疊追蹤 (stack trace) 定位問題程式碼。
-    *   **API 呼叫問題**: 檢查 GitHub API 或 LLM API 的呼叫是否成功，是否有權限問題或速率限制。
-    *   **LLM 輸出問題**: 如果 LLM 的回應不符合預期，調整你的 prompt engineering。
-    *   在本地或 Codespaces 中進行小範圍修改和測試，然後再次推送以觸發 Actions 進行集成測試。
-4.  **持續部署 (CD)**:
-    *   每次向主分支 (e.g., `main` 或 `master`) 推送程式碼時，GitHub Actions 都會自動運行，並部署最新版本的助手邏輯。這實現了持續部署。
-5.  **長期監控**:
-    *   定期檢查 GitHub Actions 頁面，審查工作流的運行歷史。
-    *   關注失敗率、執行時間和資源使用情況。
-    *   對於更高級的監控，可以在你的助手腳本中集成日誌庫，將關鍵事件記錄到外部日誌聚合服務 (如 Azure Monitor, Google Cloud Logging, AWS CloudWatch) 或錯誤監控服務 (如 Sentry)。這些服務的 API 可以直接從 Actions 中調用。
-
-## 實作階段名稱：擴展與維護階段
-
-本階段關注於提升 AI 助手的能力、優化性能，並確保其長期穩定、安全地運行。
-
-### 功能與工具對應表
-
-| 功能模組             | GitHub 功能/工具 | 所需技術               | 具體作用                                   |
-| :------------------- | :--------------- | :--------------------- | :----------------------------------------- |
-| 模塊化與可重用性     | GitHub Actions (Composite/Docker Actions) | YAML, Docker, Bash/Python | 將通用功能或複雜操作打包成可重複使用的 Actions，簡化工作流定義 |
-| 效能優化             | GitHub Actions, 程式碼優化, LLM Prompt 調優 | Python/Node.js, YAML, Prompt Engineering | 減少工作流執行時間、降低資源消耗，提升 LLM 響應速度和質量，降低成本 |
-| 安全更新與依賴管理 | GitHub Dependabot, GitHub Actions | 依賴管理工具           | 自動監控並建議更新助手的依賴庫，修復已知安全漏洞，確保軟體健康 |
-| 功能迭代與新特性     | GitHub Repositories, Pull Requests | Git, 程式碼開發         | 透過正常的軟體開發流程（分支、PR、審閱）為助手新增功能、改進邏輯 |
-
-### 實作步驟
-
-1.  **Prompt Engineering 優化**:
-    *   持續實驗不同的 prompt 結構、系統訊息、溫度 (temperature) 和 top-p 值，以提高 LLM 輸出的準確性、相關性和語氣。
-    *   考慮加入上下文提示、角色扮演或逐步思考 (chain-of-thought) 等進階技巧。
-2.  **錯誤處理增強**:
-    *   在核心邏輯中增加對 LLM API 呼叫失敗、速率限制和網路問題的重試機制（使用指數退避）。
-    *   增加更詳細的日誌記錄，以便在出現問題時進行追蹤。
-    *   處理 LLM 可能返回的不佳或無效輸出，確保助手不會發佈無意義的內容。
-3.  **功能模塊化與重構**:
-    *   將助手的不同功能拆分成獨立的函式或模組，提高程式碼的可讀性、可測試性和可維護性。
-    *   對於在多個工作流中重複使用的步驟，考慮創建一個 Composite Action 或 Docker Action。
-4.  **效能優化**:
-    *   **Actions 方面**:
-        *   利用 GitHub Actions 的快取 (Caching) 功能，加速依賴庫的安裝。
-        *   精確定義工作流觸發條件，避免不必要的運行。
-        *   使用更高效的 Runner (例如，若有需求可考慮自架 Runner)。
-    *   **LLM 方面**:
-        *   優化 prompt，減少 LLM 處理的 Token 數量。
-        *   選擇成本效益更高且滿足需求的 LLM 模型 (例如，優先使用 GPT-3.5 而非 GPT-4 進行簡單任務)。
-        *   對大型輸入進行分塊處理或摘要，減少單次 LLM 請求的負載。
-5.  **依賴管理與安全更新**:
-    *   啟用 GitHub Dependabot，讓它自動監控你的 `requirements.txt` 或 `package.json` 中的依賴庫，並在有新版本或安全漏洞時自動創建 Pull Requests。定期審查並合併這些 PR。
-    *   定期檢查並更新 GitHub Actions 的版本 (e.g., `actions/checkout@v3` 升級到 `@v4`)。
-6.  **擴展新功能**:
-    *   遵循軟體開發最佳實踐，為新功能創建獨立的分支，通過 Pull Request 審閱，確保程式碼品質。
-    *   利用 GitHub 的 Discussion 或 Issues 功能收集使用者回饋，作為助手功能改進的依據。
-
-## 深度技術門檻分析 (Deep Technical Barriers Analysis)
-
-在 GitHub 上運行 AI 助手，開發者會面臨一些特有的技術挑戰，需要深入理解和妥善處理。
-
-### 1. API 速率限制 (Rate Limiting)
-
-*   **GitHub API 限制**:
-    *   **Authenticated Requests**: 通常為每小時 5000 次請求。對於 GitHub Apps，這個限制會基於安裝的 Repository 數量而動態調整，通常會更高 (每個安裝每小時 5000 次)。
-    *   **Unauthenticated Requests**: 更低，每小時 60 次。
-    *   **挑戰**: 高頻率的事件觸發（例如，大量 PR 更新、評論）或需要遍歷大量 GitHub 資源（如獲取所有未解決的 Issue）時，很容易觸發速率限制，導致助手暫停或失敗。
-*   **LLM API 限制**:
-    *   OpenAI 和 Google Gemini 等 LLM 服務提供商，會針對每分鐘請求數 (RPM)、每分鐘 Token 數 (TPM) 設定限制。
-    *   **挑戰**: 處理長文本內容（高 TPM）或需要快速連續生成多個回應（高 RPM）時，容易觸發限制，影響助手回應速度和穩定性。
-*   **解決方案**:
-    1.  **指數退避與重試 (Exponential Backoff and Retry)**: 在觸發限制時，不要立即重試，而是等待一個逐漸增長的時間間隔後再重試。大多數 GitHub API 和 LLM SDK 內建或推薦此機制。
-    2.  **批次處理 (Batch Processing)**: 將多個小型 LLM 請求合併為一個大型請求，減少總的 API 呼叫次數（如果 LLM 支援）。
-    3.  **優化 GitHub API 請求**:
-        *   使用 Conditional Requests (Etag) 減少不必要的資料傳輸和請求計數。
-        *   只請求必要的欄位，避免獲取整個對象。
-        *   優先使用 Webhook 而非頻繁輪詢。
-    4.  **優化 LLM Prompt**:
-        *   簡潔精煉 Prompt，減少不必要的上下文，降低 Token 使用量。
-        *   對於長文本，考慮分塊處理或預先摘要。
-    5.  **監控與預警**: 監控 API 速率使用情況，並在接近限制時發出警報。
-
-### 2. 權限範圍 (Scope) 設定安全性
-
-*   **GitHub Apps vs. Personal Access Tokens (PAT)**:
-    *   **PAT**: 權限粒度較粗，一旦洩露，可能對帳戶造成廣泛影響。
-    *   **GitHub Apps**: 提供極其細粒度的權限控制，你可以精確指定 App 只能讀取 Issue、寫入 PR 評論等。即使 App 私鑰洩露，其影響範圍也遠小於 PAT。
-    *   **挑戰**: 配置不當可能導致助手獲得超出其職責範圍的權限，構成潛在的安全漏洞（例如，一個僅需評論的助手卻能推送程式碼）。
-*   **GitHub Actions Token 權限**: 每個 GitHub Actions 工作流運行時，都會自動生成一個臨時代理的 `GITHUB_TOKEN`。這個 Token 的權限由工作流 YAML 檔案中的 `permissions` 塊控制。
-*   **解決方案**:
-    1.  **最小權限原則 (Principle of Least Privilege)**: 始終只授予助手完成其任務所需的最小權限。仔細閱讀 GitHub App 權限文檔，精確選擇。
-    2.  **定期審查**: 定期審查 GitHub App 的權限配置和安裝範圍，移除任何不必要的權限。
-    3.  **使用 `permissions` 關鍵字**: 在 GitHub Actions 工作流中，明確設定 `permissions`，限制自動生成的 `GITHUB_TOKEN` 的能力，即使助手腳本有 Bug 也無法執行超出權限的操作。
-    4.  **安全儲存機密**: GitHub Secrets 提供了一個安全的機制來儲存 API Keys 和私鑰，確保它們不會被硬編碼或洩露到日誌中。
-
-### 3. GitHub Actions 執行長度與資源限制
-
-*   **執行時長限制**: 單個 GitHub Actions 工作流的執行時間限制為最長 6 小時。
-    *   **挑戰**: 對於非常複雜、需要大量計算或長時間等待 LLM 回應的 AI 任務，可能會超時。
-*   **免費額度限制**: GitHub 提供每月免費的 Actions 運行時間（例如，私有 Repository 500 分鐘/月，公共 Repository 更高），超出後需付費。
-    *   **挑戰**: 高頻率觸發或長時間運行的助手可能很快耗盡免費額度，產生意外成本。
-*   **記憶體/CPU 限制**: 標準 GitHub Actions Runner 提供的 CPU 和記憶體資源有限。
-    *   **挑戰**: 執行大型模型或需要大量預處理的任務可能會遇到性能瓶頸。
-*   **解決方案**:
-    1.  **程式碼優化**: 提高助手腳本的執行效率，減少不必要的計算和 I/O 操作。
-    2.  **任務拆分與異步化**:
-        *   將長時間運行的任務分解為多個短任務，可以透過後續 Actions 或外部服務協調。
-        *   對於需要長時間等待的 LLM 任務，考慮將核心處理邏輯卸載到一個外部的雲端函數 (AWS Lambda, Azure Functions, Google Cloud Functions)，由 Actions 觸發後，函數異步執行並回調 GitHub API 更新狀態。
-    3.  **精確控制觸發條件**: 只在真正需要時才觸發工作流，避免不必要的運行。例如，對於 PR 審閱，可以只在特定檔案類型變更時才觸發。
-    4.  **利用緩存 (Caching)**: 使用 `actions/cache` 來緩存依賴項，減少每次運行時的安裝時間。
-    5.  **監控與成本控制**: 定期查看 Actions 使用報告，設定預算提醒。對於商業專案，考慮升級帳戶或使用自託管 Runner 獲得更多控制。
-
-### 4. Prompt Engineering 與 LLM 輸出品質
-
-*   **挑戰**: LLM 的輸出品質、準確性、相關性和風格高度依賴於 Prompt 的設計。不良的 Prompt 可能導致助手：
-    *   生成不相關或無用的資訊。
-    *   產生幻覺 (hallucinations)。
-    *   語氣不當或不專業。
-    *   無法理解特定語境或開發者意圖。
-*   **解決方案**:
-    1.  **迭代式 Prompt 設計**: 將 Prompt 設計視為一個工程流程，持續實驗、測試和優化。
-    2.  **清晰定義角色與任務**: 在 System Message 中明確定義助手的角色 (e.g., "你是一個資深 Python 開發者") 和具體任務目標。
-    3.  **提供充足上下文**: 將 GitHub 事件的相關上下文（如 PR diff、Issue 描述、程式碼片段）作為 User Message 的一部分傳遞給 LLM。
-    4.  **指定輸出格式**: 使用 JSON、Markdown 或特定的語法結構，明確要求 LLM 輸出特定格式，方便程式解析。
-    5.  **Few-shot Examples**: 提供少量高質量的輸入-輸出範例，引導 LLM 學習期望的行為模式。
-    6.  **安全護欄 (Guardrails)**: 透過 Prompt 指令或後處理程式碼來限制 LLM 的不當行為或過濾敏感資訊。
-    7.  **使用者回饋迴圈**: 建立機制讓使用者可以評價助手的表現，並將這些回饋用於改進 Prompt。
-
-### 5. 成本控制 (Cost Management)
-
-*   **LLM API 成本**: LLM 服務通常按 Token 數計費（輸入 Token + 輸出 Token）。大型模型和長文本處理成本更高。
-*   **GitHub Actions 成本**: 超出免費額度的運行時間、存儲和日誌保留會產生費用。
-*   **挑戰**: 由於自動化助手的性質，高頻率觸發和大量文本處理可能迅速累積成本，尤其是在開發和測試階段。
-*   **解決方案**:
-    1.  **Token 優化**:
-        *   精簡 Prompt，減少不必要的冗餘資訊。
-        *   根據任務選擇最經濟且滿足需求的 LLM 模型。
-        *   對 LLM 的輸入和輸出進行預處理/後處理，只保留關鍵資訊。
-    2.  **Actions 運行優化**:
-        *   嚴格控制工作流的觸發條件，避免在非必要時運行。
-        *   利用 Actions Caching 減少安裝時間。
-        *   監控 Actions 運行時間，優化腳本效率。
-    3.  **預算與警報**:
-        *   在 LLM 服務和 GitHub 上設定預算限制和成本警報，以便及時發現異常支出。
-        *   在開發階段使用較小、較便宜的模型，只在部署時切換到高性能模型。
 
 ---
 
-這份報告提供了從 GitHub 原生 AI 助手的技術定義到實作細節，再到深度技術門檻的全面分析。希望這能為您在 GitHub 環境下構建和運行 AI 助手提供扎實的基礎和實用的指導。
+## 實作階段四：部署與監控階段
+
+在完成上述配置和開發後，將變更推送到 GitHub 儲存庫，並監控其運行情況。
+
+### 功能與工具對應表
+
+| GitHub 功能模組 | 所需技術/工具          | 作用                                                              |
+| :-------------- | :--------------------- | :---------------------------------------------------------------- |
+| **Git**         | `git push`             | 將本地或 Codespaces 的程式碼變更同步到 GitHub 遠端儲存庫。          |
+| **GitHub Actions Runs** | GitHub Web Interface | 提供所有工作流執行的詳細日誌，包括每個步驟的輸出和潛在錯誤訊息。  |
+| **GitHub Pull Requests** | GitHub Web Interface | 助手的輸出（例如審查評論）將直接顯示在相關的 Pull Request 頁面。 |
+
+### 執行步驟
+
+1.  **提交並推送程式碼**
+    *   在您的 Codespaces 環境或本地終端機中，執行以下 Git 命令：
+        ```bash
+        git add .
+        git commit -m "feat: Add Gemini-powered PR reviewer assistant"
+        git push origin main
+        ```
+    *   這將把 `scripts/pr_reviewer.py` 和 `.github/workflows/pr_review_workflow.yml` 推送到您的 GitHub 儲存庫。
+
+2.  **創建一個 Pull Request 進行測試**
+    *   為了觸發您的 AI 助手，您需要創建一個新的 Pull Request。
+    *   在您的儲存庫中，創建一個新的分支 (例如 `test-pr-review`)，並對任何文件進行一些小的程式碼變更。
+    *   將此分支推送到 GitHub。
+    *   在 GitHub 儲存庫頁面，點擊 `Pull requests` -> `New pull request`。
+    *   選擇 `main` 作為 `base` 分支，您的新分支 (例如 `test-pr-review`) 作為 `compare` 分支。
+    *   創建 Pull Request。
+
+3.  **監控 GitHub Actions 執行**
+    *   提交 Pull Request 後，立即前往您的 GitHub 儲存庫的 `Actions` 選項卡。
+    *   您應該會看到一個名為 `AI Pull Request Reviewer` 的工作流正在運行或已完成。
+    *   點擊該工作流的運行實例，您可以查看每個步驟的詳細日誌，包括 Python 腳本的輸出，以及任何潛在的錯誤。
+
+4.  **檢查 AI 助手的評論**
+    *   如果工作流成功執行，返回到您剛才創建的 Pull Request 頁面。
+    *   在 `Conversation` 或 `Files changed` 選項卡下，您應該會看到 AI 助手發布的審查評論。
+
+### 成果展示 (預期)
+
+當您創建 Pull Request 後，GitHub Actions 將會自動執行。您將在 Pull Request 的討論區看到類似以下的評論：
+
+```markdown
+**AI Pull Request 審查報告 (由 Gemini 提供)**
+
+您好！我對這次的 Pull Request 進行了初步審查。以下是一些觀察和建議：
+
+**總體評估：**
+這是一個針對 `[文件名1]` 和 `[文件名2]` 的變更。
+
+**具體建議：**
+- **文件: `src/main.py`**
+  - **潛在問題:** 如果 `[某函數]` 的輸入範圍未被嚴格限制，可能存在邊界條件錯誤。建議添加單元測試以覆蓋這些情況。
+  - **程式碼風格:** 函數命名 `[某命名]` 可以考慮更具描述性，例如 `[建議命名]`。
+- **文件: `tests/test_utils.py`**
+  - **測試覆蓋率:** `[某功能]` 似乎缺少對異常情況的測試，建議增加對錯誤處理邏輯的測試。
+  - **維護性:** 考慮將一些重複的測試設置提取為 fixture，以提高測試代碼的可讀性。
+
+**總結：**
+整體來說，這次的變更方向正確。如果能根據上述建議進行優化，將進一步提升程式碼品質和 robustness。
+
+感謝您的貢獻！
+```
+
+---
+
+## 結論
+
+透過 GitHub Actions 結合外部 LLM 服務（如 Gemini），我們可以高效地構建出深度整合於 GitHub 工作流程的 AI 助手。這不僅能將 AI 的智慧能力引入到日常的軟體開發實踐中，實現諸如自動程式碼審查、Issue 分析、文件生成等自動化任務，更能顯著提升開發團隊的生產力與協作效率。
+
+然而，在實施過程中，開發者必須仔細考量技術門檻，尤其是 API 速率限制、權限安全性配置、以及 GitHub Actions 的資源與時間限制。透過精心的提示工程、合理的權限管理、以及對成本和資源的預算規劃，才能確保 AI 助手在 GitHub 生態系統中穩定、高效且安全地運行。未來的發展方向將可能涉及更複雜的 GitHub App 集成，提供更精細的 UI 互動和更廣泛的平台整合能力。
