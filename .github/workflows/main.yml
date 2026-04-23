@@ -1,11 +1,13 @@
-name: AI-Researcher-Worker
+name: AI-Multi-Task-Worker
+
 on:
   issues:
     types: [labeled]
 
 jobs:
   research_job:
-    if: github.event.label.name == 'research'
+    # 🚀 修改 1：讓 research 和 presentation 標籤都能觸發這個任務
+    if: github.event.label.name == 'research' || github.event.label.name == 'presentation'
     runs-on: ubuntu-latest
     permissions:
       issues: write
@@ -18,15 +20,18 @@ jobs:
         with:
           python-version: '3.11'
           
-      - name: Install Google AI SDK
-        run: pip install google-genai
+      - name: Install Dependencies
+        # 🚀 修改 2：除了 Google SDK，還要安裝 python-pptx 才能製作投影片
+        run: pip install google-genai python-pptx
           
       - name: Run AI Agent
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ISSUE_BODY: ${{ github.event.issue.body }}
+          # 🚀 修改 3：將標籤名稱傳給 Python 腳本，讓它知道要執行哪種任務
+          TRIGGER_LABEL: ${{ github.event.label.name }}
         run: |
-          # 使用 'tee' 指令：同時把結果印在螢幕上 (監控) 並存入檔案 (回覆)
+          # 執行腳本，並將輸出結果存入 report.md
           python scripts/researcher.py | tee report.md
           
       - name: Post Report to Issue
@@ -34,3 +39,11 @@ jobs:
         with:
           issue-number: ${{ github.event.issue.number }}
           body-path: report.md
+
+      # 🚀 修改 4：如果是 presentation 模式，自動上傳 PPT 檔案供下載
+      - name: Upload Presentation PPT
+        if: github.event.label.name == 'presentation'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vector-Research-PPT
+          path: Vector_Research.pptx
