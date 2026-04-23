@@ -30,15 +30,15 @@ jobs:
           ISSUE_BODY: ${{ github.event.issue.body }}
           TRIGGER_LABEL: ${{ github.event.label.name }}
         run: |
-          # 執行 AI 研究，並將結果存為 report.md
-          python scripts/researcher.py > report.md
+          # 將檔名設定為 report_Issue編號.md
+          python scripts/researcher.py > report_${{ github.event.issue.number }}.md
           
       - name: Step 2 - Generate PPTX from Report
         # 🚀 只有在標籤為 presentation 時，才執行獨立的 PPT 轉換腳本
         if: github.event.label.name == 'presentation'
         run: |
           # 讀取剛剛產生的 report.md 並轉換為 PPTX
-          python scripts/create_pptx.py report.md
+          python scripts/create_pptx.py report_${{ github.event.issue.number }}.md
           
       - name: Post Report to Issue
         uses: peter-evans/create-or-update-comment@v4
