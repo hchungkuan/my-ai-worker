@@ -1,127 +1,144 @@
 import os
 import sys
+import re
 from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 from pptx.enum.text import PP_ALIGN
 
-# --- 設定 Vector 企業風格色彩 ---
-VECTOR_BLUE = RGBColor(0, 51, 102)
-TEXT_BLACK = RGBColor(33, 33, 33)
-FONT_NAME = 'Microsoft JhengHei'
+# --- 專業視覺參數 ---
+VECTOR_BLUE = RGBColor(0, 51, 102)  # Vector 標誌深藍
+TEXT_DARK = RGBColor(33, 33, 33)
+BG_LIGHT = RGBColor(245, 245, 245)
+FONT_MAIN = 'Microsoft JhengHei'
 
-def add_table_to_slide(slide, table_data):
-    """將 Markdown 表格數據轉換為 PPT 實體表格"""
-    if not table_data:
-        return
+def set_cell_font(cell, size=Pt(12), bold=False):
+    """設定表格單元格字體"""
+    for paragraph in cell.text_frame.paragraphs:
+        paragraph.font.name = FONT_NAME
+        paragraph.font.size = size
+        paragraph.font.bold = bold
+        paragraph.font.color.rgb = TEXT_DARK
+
+def add_slide_with_table(prs, title, table_data):
+    """為表格內容獨立建立一張投影片"""
+    slide = prs.slides.add_slide(prs.slide_layouts[1])
+    slide.shapes.title.text = f"{title} - 硬體對應"
     
+    # 設定標題樣式
+    title_para = slide.shapes.title.text_frame.paragraphs[0]
+    title_para.font.color.rgb = VECTOR_BLUE
+    title_para.font.name = FONT_MAIN
+
+    if not table_data: return
+
     rows = len(table_data)
     cols = len(table_data[0])
     
-    # 在投影片下方位置建立表格
+    # 計算表格位置 (居中且佔滿寬度)
     left = Inches(0.5)
-    top = Inches(2.5)
+    top = Inches(1.5)
     width = Inches(9.0)
-    height = Inches(0.5 * rows)
+    height = Inches(0.6 * rows)
     
-    table_shape = slide.shapes.add_table(rows, cols, left, top, width, height)
-    table = table_shape.table
-    
-    for r, row_data in enumerate(table_data):
-        for c, cell_text in enumerate(row_data):
+    shape = slide.shapes.add_table(rows, cols, left, top, width, height)
+    table = shape.table
+
+    for r, row in enumerate(table_data):
+        for c, cell_text in enumerate(row):
             cell = table.cell(r, c)
             cell.text = cell_text.strip()
-            # 設定表格字體
-            for paragraph in cell.text_frame.paragraphs:
-                paragraph.font.size = Pt(12)
-                paragraph.font.name = FONT_NAME
-                if r == 0: # 標題列加粗
-                    paragraph.font.bold = True
+            # 表格標題行美化
+            if r == 0:
+                cell.fill.solid()
+                cell.fill.fore_color.rgb = VECTOR_BLUE
+                for p in cell.text_frame.paragraphs:
+                    p.font.color.rgb = RGBColor(255, 255, 255)
+                    p.font.bold = True
+                    p.font.size = Pt(12)
+            else:
+                for p in cell.text_frame.paragraphs:
+                    p.font.size = Pt(11)
+                    p.font.name = FONT_MAIN
 
-def create_pptx_from_file(input_file="report.md", output_file="Vector_Presentation.pptx"):
-    if not os.path.exists(input_file):
-        print(f"❌ 找不到輸入檔案: {input_file}")
+def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pptx"):
+    if not os.path.exists(md_file):
+        print(f"❌ 錯誤：找不到 {md_file}")
         return
 
-    with open(input_file, "r", encoding="utf-8") as f:
-        content = f.read()
-
     prs = Presentation()
+    with open(md_file, "r", encoding="utf-8") as f:
+        lines = f.readlines()
 
-    # --- 處理投影片分割 ---
-    # 先過濾掉 Markdown 的分隔線 ---
-    content = content.replace('\n---', '')
-    sections = content.split('Slide:')
+    current_slide_title = "Vector 技術研究"
+    current_bullets = []
+    current_table = []
     
-    for i, section in enumerate(sections):
-        if not section.strip():
-            continue
-        
-        lines = [l.strip() for l in section.strip().split('\n') if l.strip()]
-        title_text = lines[0].replace('#', '').strip()
-        
-        # 區分列表內容與表格內容
-        bullets = []
-        table_data = []
-        is_table = False
-        
-        for line in lines[1:]:
-            if line.startswith('|'):
-                # 排除 Markdown 表格的分隔線 |---|---|
-                if '---' in line: continue
-                cells = [c.strip() for c in line.split('|') if c.strip()]
-                if cells: table_data.append(cells)
-            elif line.startswith('-'):
-                bullets.append(line.lstrip('-').strip())
-
-        # 選擇版面：第一張用標題版面，其餘用內容版面
-        layout_idx = 0 if i == 1 else 1
-        slide = prs.slides.add_slide(prs.slide_layouts[layout_idx])
-        
-        # 設定標題
-        title_shape = slide.shapes.title
-        title_shape.text = title_text
-        for p in title_shape.text_frame.paragraphs:
-            p.font.name = FONT_NAME
-            p.font.bold = True
-            p.font.color.rgb = VECTOR_BLUE
-            p.font.size = Pt(28)
-
-        # 設定內容 (如果是標題頁)
-        if layout_idx == 0:
-            if len(lines) > 1:
-                slide.placeholders[1].text = "\n".join(bullets)
-        else:
-            # 設定列表
-            if bullets:
-                body_shape = slide.placeholders[1]
-                tf = body_shape.text_frame
-                tf.word_wrap = True
-                for b in bullets:
-                    p = tf.add_paragraph()
-                    p.text = b
-                    p.font.size = Pt(18)
-                    p.font.name = FONT_NAME
-                    p.space_after = Pt(10)
+    def flush_content():
+        """將目前暫存的內容寫入投影片並清空"""
+        nonlocal current_bullets, current_table
+        if current_bullets:
+            slide = prs.slides.add_slide(prs.slide_layouts[1])
+            slide.shapes.title.text = current_slide_title
+            # 設定標題字體
+            title_para = slide.shapes.title.text_frame.paragraphs[0]
+            title_para.font.color.rgb = VECTOR_BLUE
+            title_para.font.name = FONT_MAIN
             
-            # 🚀 插入表格 (如果有的話)
-            if table_data:
-                add_table_to_slide(slide, table_data)
+            tf = slide.placeholders[1].text_frame
+            tf.word_wrap = True
+            for b in current_bullets:
+                p = tf.add_paragraph()
+                p.text = b
+                p.font.size = Pt(18)
+                p.font.name = FONT_MAIN
+                p.space_after = Pt(10)
+            current_bullets = []
+            
+        if current_table:
+            add_slide_with_table(prs, current_slide_title, current_table)
+            current_table = []
 
+    # --- 標題首頁 ---
+    slide = prs.slides.add_slide(prs.slide_layouts[0])
+    slide.shapes.title.text = "Vector Informatik\n充電通訊協議與硬體對應研究"
+    slide.placeholders[1].text = f"技術專家報告\n日期：{os.path.getmtime(md_file)}"
+
+    # --- 解析 Markdown ---
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('---'): continue
+
+        # 1. 偵測大標題 (協定名稱) -> 重設標題
+        if line.startswith('## '):
+            flush_content()
+            current_slide_title = line.replace('## ', '').replace('協定名稱：', '').strip()
+            
+        # 2. 偵測小標題 (描述、對應表、門檻) -> 強制換頁
+        elif line.startswith('### '):
+            flush_content()
+            sub_title = line.replace('### ', '').strip()
+            current_slide_title = f"{current_slide_title} - {sub_title}"
+
+        # 3. 偵測表格行
+        elif line.startswith('|'):
+            if '---' in line: continue
+            cells = [c.strip() for c in line.split('|') if c.strip()]
+            if cells: current_table.append(cells)
+
+        # 4. 偵測清單
+        elif line.startswith(('* ', '- ', '1. ', '2. ')):
+            clean_bullet = re.sub(r'^(\*|-|\d+\.)\s+', '', line)
+            current_bullets.append(clean_bullet)
+        
+        # 5. 一般段落文字
+        elif len(line) > 5 and not line.startswith('|'):
+            current_bullets.append(line)
+
+    flush_content() # 處理最後殘留內容
     prs.save(output_file)
-    print(f"✅ PPTX 已產生: {output_file}")
+    print(f"✅ 專業 PPT 已產生：{output_file}")
 
 if __name__ == "__main__":
-    # 1. 檢查有沒有輸入參數
-    if len(sys.argv) > 1:
-        target_file = sys.argv[1]
-    else:
-        # 2. 如果沒輸入，自動尋找目錄下最新的 .md 檔案，或者給予預設值
-        print("💡 提示：未指定檔案，預設讀取 report.md")
-        target_file = "report.md"
-
-    # 3. 檢查檔案是否存在
-    if os.path.exists(target_file):
-        create_pptx_from_file(target_file)
-    else:
-        print(f"❌ 錯誤：找不到檔案 '{target_file}'，請確認檔名是否正確。")
+    target = sys.argv[1] if len(sys.argv) > 1 else "reports/report_001.md"
+    create_pptx_from_md(target)
