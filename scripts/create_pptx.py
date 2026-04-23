@@ -112,6 +112,16 @@ def create_pptx_from_file(input_file="report.md", output_file="Vector_Presentati
     print(f"✅ PPTX 已產生: {output_file}")
 
 if __name__ == "__main__":
-    # 可以從命令列傳入檔名，或預設讀取 report.md
-    target_file = sys.argv[1] if len(sys.argv) > 1 else "report.md"
-    create_pptx_from_file(target_file)
+    # 1. 檢查有沒有輸入參數
+    if len(sys.argv) > 1:
+        target_file = sys.argv[1]
+    else:
+        # 2. 如果沒輸入，自動尋找目錄下最新的 .md 檔案，或者給予預設值
+        print("💡 提示：未指定檔案，預設讀取 report.md")
+        target_file = "report.md"
+
+    # 3. 檢查檔案是否存在
+    if os.path.exists(target_file):
+        create_pptx_from_file(target_file)
+    else:
+        print(f"❌ 錯誤：找不到檔案 '{target_file}'，請確認檔名是否正確。")
