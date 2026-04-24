@@ -6,28 +6,32 @@ from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 
-# --- 專業視覺參數 ---
-VECTOR_BLUE = RGBColor(0, 51, 102)
+# --- 通用視覺參數設定 ---
+# 使用中性的深藍灰色作為主題色
+THEME_COLOR = RGBColor(44, 62, 80) 
 TEXT_DARK = RGBColor(33, 33, 33)
 FONT_MAIN = 'Microsoft JhengHei'
 
 def clean_md_syntax(text):
-    """徹底清除 Markdown 語法符號"""
+    """徹底清除 Markdown 語法符號與特定報告標籤"""
     if not text: return ""
+    # 移除粗體/斜體語法
     text = re.sub(r'[\*_]{1,2}(.*?)[\*_]{1,2}', r'\1', text)
+    # 移除條列符號與多餘空格
     text = text.replace('*', '').strip()
-    # 移除多餘的 "協定名稱：" 字眼，讓標題更精簡
-    text = text.replace('協定名稱：', '')
+    # 移除常見的引導標籤，使內容更簡潔
+    labels_to_remove = ['協定名稱：', '技術名稱：', '任務：']
+    for label in labels_to_remove:
+        text = text.replace(label, '')
     return text
 
 def set_title_style(title_shape, main_title, sub_title, page_idx=0, total_pages=1):
-    """🚀 優化：動態組合標題並加入分頁標示"""
-    # 組合標題：[大標] - [小標]
+    """動態組合標題並加入分頁標示，移除寫死的品牌字眼"""
     full_title = clean_md_syntax(main_title)
     if sub_title:
         full_title += f" - {clean_md_syntax(sub_title)}"
     
-    # 🚀 如果有分頁，加入 (1/2) 或 (續) 的標記
+    # 加入分頁進度標記 (例如: 1/2)
     if total_pages > 1:
         full_title += f" ({page_idx + 1}/{total_pages})"
 
@@ -37,33 +41,40 @@ def set_title_style(title_shape, main_title, sub_title, page_idx=0, total_pages=
     p = tf.paragraphs[0]
     p.font.name = FONT_MAIN
     p.font.bold = True
-    p.font.color.rgb = VECTOR_BLUE
+    p.font.color.rgb = THEME_COLOR
     
-    # 標題字體大小自適應
+    # 標題大小根據長度自適應
     length = len(full_title)
     if length > 35: p.font.size = Pt(18)
     elif length > 25: p.font.size = Pt(22)
     else: p.font.size = Pt(26)
 
 def get_body_placeholder(slide):
+    """取得投影片中的內容預留位置"""
     for shape in slide.placeholders:
         if shape.placeholder_format.type == 2 or shape.placeholder_format.idx == 1:
             return shape
     return None
 
-def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pptx"):
-    if not os.path.exists(md_file): return
+def create_pptx_from_md(md_file="report.md", output_file="Research_Presentation.pptx"):
+    if not os.path.exists(md_file): 
+        print(f"❌ 找不到檔案: {md_file}")
+        return
     
+    # 嘗試從檔名解析主題，作為首頁標題
+    base_name = os.path.basename(md_file).replace('.md', '')
+    display_subject = base_name.split('_')[-1] if '_' in base_name else "技術研究"
+
     prs = Presentation()
     with open(md_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    # 1. 處理封面
+    # --- 1. 處理封面 (通用標題) ---
     slide = prs.slides.add_slide(prs.slide_layouts[0])
-    slide.shapes.title.text = "Vector Informatik\n技術研究與硬體對應報告"
-    slide.placeholders[1].text = f"自動生成報告\n日期：{time.strftime('%Y-%m-%d')}"
+    slide.shapes.title.text = f"{display_subject}\n技術分析與研究報告"
+    slide.placeholders[1].text = f"AI 輔助生成文件\n日期：{time.strftime('%Y-%m-%d')}"
 
-    # 2. 解析大章節 (##)
+    # --- 2. 解析大章節 (##) ---
     main_sections = re.split(r'\n(?=## )', content)
     
     for m_sec in main_sections:
@@ -72,14 +83,13 @@ def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pp
         
         main_title = m_lines[0].strip('# ')
         
-        # 3. 解析小章節 (###)
+        # --- 3. 解析小章節 (###) ---
         sub_sections = re.split(r'\n(?=### )', '\n'.join(m_lines[1:]))
         
         for s_sec in sub_sections:
             s_lines = s_sec.strip().split('\n')
             if not s_lines: continue
             
-            # 判斷有沒有小標題
             if s_lines[0].startswith('###'):
                 sub_title = s_lines[0].strip('# ')
                 body_lines = s_lines[1:]
@@ -87,7 +97,7 @@ def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pp
                 sub_title = ""
                 body_lines = s_lines
 
-            # 分離文字與表格
+            # 分離純文字內容與表格數據
             table_data = []
             text_content = []
             for line in body_lines:
@@ -100,9 +110,9 @@ def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pp
                 else:
                     text_content.append(line)
 
-            # 🚀 處理文字分頁 (每 7 行一頁)
+            # 🚀 處理文字分頁 (優化排版)
             if text_content:
-                chunk_size = 7
+                chunk_size = 7 # 每頁最多行數
                 pages = [text_content[i:i + chunk_size] for i in range(0, len(text_content), chunk_size)]
                 for idx, chunk in enumerate(pages):
                     slide = prs.slides.add_slide(prs.slide_layouts[1])
@@ -119,16 +129,15 @@ def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pp
                             p.font.size = Pt(16)
                             p.space_after = Pt(10)
 
-            # 🚀 處理表格 (獨立一頁)
+            # 🚀 處理表格分頁
             if table_data:
                 slide = prs.slides.add_slide(prs.slide_layouts[1])
-                set_title_style(slide.shapes.title, main_title, sub_title + " (數據表)")
+                set_title_style(slide.shapes.title, main_title, sub_title + " (詳細數據)")
                 
-                # 移除原有的內容框改放表格
                 body = get_body_placeholder(slide)
                 if body:
                     sp = body.element
-                    sp.getparent().remove(sp)
+                    sp.getparent().remove(sp) # 移除佔位框改放表格
 
                 rows, cols = len(table_data), len(table_data[0])
                 table_shape = slide.shapes.add_table(rows, cols, Inches(0.5), Inches(1.5), Inches(9.0), Inches(0.4))
@@ -140,15 +149,16 @@ def create_pptx_from_md(md_file="report.md", output_file="Vector_Presentation.pp
                         for p in cell.text_frame.paragraphs:
                             p.font.name = FONT_MAIN
                             p.font.size = Pt(10)
-                            if r == 0:
+                            if r == 0: # 設定通用表頭樣式
                                 cell.fill.solid()
-                                cell.fill.fore_color.rgb = VECTOR_BLUE
+                                cell.fill.fore_color.rgb = THEME_COLOR
                                 p.font.color.rgb = RGBColor(255, 255, 255)
                                 p.font.bold = True
 
     prs.save(output_file)
-    print(f"✅ 標題優化版 PPT 已產生：{output_file}")
+    print(f"✅ 通用版 PPT 已生成至: {output_file}")
 
 if __name__ == "__main__":
-    target = sys.argv[1] if len(sys.argv) > 1 else "reports/report_001.md"
+    # 支援動態指定輸入檔案，預設為 generic_report.md
+    target = sys.argv[1] if len(sys.argv) > 1 else "report.md"
     create_pptx_from_md(target)
